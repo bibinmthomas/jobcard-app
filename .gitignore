@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+renderer/node_modules/
+
+# Build outputs
+dist/
+renderer/dist/
+out/
+
+# Database
+electron/database/
+*.db
+*.db-journal
+
+# User data
+pdf-exports/
+pdf-imports/
+layouts/
+
+# Prisma
+electron/prisma/migrations/
+electron/prisma/generated/
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*

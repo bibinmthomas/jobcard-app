@@ -1,0 +1,80 @@
+// Prisma schema for JobCard Desktop Manager
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:../database/jobcards.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "./generated/client"
+}
+
+model JobCard {
+  id           Int      @id @default(autoincrement())
+  title        String
+  description  String?
+  customData   String?  // JSON string for custom fields
+  layoutId     Int?
+  layout       Layout?  @relation(fields: [layoutId], references: [id])
+  isDeleted    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model FieldCategory {
+  id           Int           @id @default(autoincrement())
+  name         String        @unique
+  description  String?
+  order        Int           @default(0)
+  isDeleted    Boolean       @default(false)
+  customFields CustomField[]
+  layouts      LayoutCategory[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model CustomField {
+  id             Int            @id @default(autoincrement())
+  name           String
+  type           String         // text, number, date, select, etc.
+  options        String?        // JSON string for select options
+  required       Boolean        @default(false)
+  order          Int            @default(0)
+  categoryId     Int
+  category       FieldCategory  @relation(fields: [categoryId], references: [id])
+  isDeleted      Boolean        @default(false)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@unique([name, categoryId])
+}
+
+model Layout {
+  id         Int              @id @default(autoincrement())
+  name       String
+  jsonConfig String           // JSON string storing the layout configuration (multi-page support)
+  categories LayoutCategory[]
+  jobCards   JobCard[]
+  isDeleted  Boolean          @default(false)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+}
+
+model LayoutCategory {
+  id         Int           @id @default(autoincrement())
+  layoutId   Int
+  categoryId Int
+  layout     Layout        @relation(fields: [layoutId], references: [id])
+  category   FieldCategory @relation(fields: [categoryId], references: [id])
+
+  @@unique([layoutId, categoryId])
+}
+
+model AppSettings {
+  id               Int      @id @default(autoincrement())
+  key              String   @unique
+  value            String   // JSON string for flexible values
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
