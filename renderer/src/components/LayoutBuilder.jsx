@@ -7,7 +7,7 @@ import { useFieldCategories } from '../hooks/useFieldCategories';
 import { api } from '../utils/api';
 import { 
   X, Plus, Trash2, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, 
-  ChevronLeft, ChevronRight, Image as ImageIcon, Table, Type, Crop, Move, Copy
+  ChevronLeft, ChevronRight, Image as ImageIcon, Table, Type, Move, Copy
 } from 'lucide-react';
 
 const A4_WIDTH = 595;
@@ -27,6 +27,12 @@ const DEFAULT_COLORS = [
 ];
 
 export default function LayoutBuilder({ layout, onSave, selectedCategories = [], onCategoriesChange }) {
+  const idRef = useRef(0);
+  const nextId = useCallback((prefix = 'el') => {
+    idRef.current += 1;
+    return `${prefix}-${idRef.current}`;
+  }, []);
+
   const [pages, setPages] = useState(() => {
     const existingPages = layout?.jsonConfig?.pages;
     if (existingPages && existingPages.length > 0) {
@@ -37,7 +43,7 @@ export default function LayoutBuilder({ layout, onSave, selectedCategories = [],
     }
     const existingElements = layout?.jsonConfig?.elements || [];
     return [{
-      id: `page-${Date.now()}`,
+      id: 'page-initial',
       elements: existingElements.map(el => ({ ...el, draggable: true }))
     }];
   });
@@ -47,14 +53,11 @@ export default function LayoutBuilder({ layout, onSave, selectedCategories = [],
   const [newText, setNewText] = useState('');
   const [tool, setTool] = useState('select');
   const [tableConfig, setTableConfig] = useState({ rows: 3, cols: 3 });
-  const [cropMode, setCropMode] = useState(false);
-  const [cropRect, setCropRect] = useState(null);
   
   const { categories } = useFieldCategories();
   const stageRef = useRef(null);
   const transformerRef = useRef(null);
   const fileInputRef = useRef(null);
-  const imageRefs = useRef({});
   
   const currentPage = pages[currentPageIndex] || { elements: [] };
   const elements = currentPage.elements || [];
@@ -84,7 +87,7 @@ export default function LayoutBuilder({ layout, onSave, selectedCategories = [],
 
   const addPage = () => {
     const newPage = {
-      id: `page-${Date.now()}`,
+      id: nextId('page'),
       elements: []
     };
     setPages([...pages, newPage]);
@@ -108,10 +111,10 @@ export default function LayoutBuilder({ layout, onSave, selectedCategories = [],
   const duplicatePage = (index) => {
     const pageToCopy = pages[index];
     const newPage = {
-      id: `page-${Date.now()}`,
+      id: nextId('page'),
       elements: pageToCopy.elements.map(el => ({
         ...el,
-        id: `${el.type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        id: nextId(el.type),
       }))
     };
     const newPages = [...pages];
@@ -123,7 +126,7 @@ export default function LayoutBuilder({ layout, onSave, selectedCategories = [],
     if (!newText.trim()) return;
 
     const newElement = {
-      id: `text-${Date.now()}`,
+      id: nextId('text'),
       type: 'text',
       text: newText,
       x: 50,
@@ -144,7 +147,7 @@ export default function LayoutBuilder({ layout, onSave, selectedCategories = [],
 
   const addPlaceholder = (placeholder) => {
     const newElement = {
-      id: `text-${Date.now()}`,
+      id: nextId('text'),
       type: 'text',
       text: placeholder,
       x: 50,
@@ -212,7 +215,7 @@ export default function LayoutBuilder({ layout, onSave, selectedCategories = [],
         }
         
         const newElement = {
-          id: `image-${Date.now()}`,
+          id: nextId('image'),
           type: 'image',
           src: base64Data,
           x: 50,
@@ -256,7 +259,7 @@ export default function LayoutBuilder({ layout, onSave, selectedCategories = [],
     }
     
     const newElement = {
-      id: `table-${Date.now()}`,
+      id: nextId('table'),
       type: 'table',
       x: 50,
       y: 50,
@@ -458,7 +461,6 @@ export default function LayoutBuilder({ layout, onSave, selectedCategories = [],
 
   const handleSelect = (id) => {
     setSelectedId(id);
-    setCropMode(false);
   };
 
   const deleteSelected = () => {
@@ -475,7 +477,7 @@ export default function LayoutBuilder({ layout, onSave, selectedCategories = [],
     
     const newElement = {
       ...element,
-      id: `${element.type}-${Date.now()}`,
+      id: nextId(element.type),
       x: element.x + 20,
       y: element.y + 20,
     };
@@ -498,38 +500,13 @@ export default function LayoutBuilder({ layout, onSave, selectedCategories = [],
   const toggleItalic = () => updateSelectedProperty('italic', !selectedElement?.italic);
   const toggleUnderline = () => updateSelectedProperty('underline', !selectedElement?.underline);
 
-  const startCrop = () => {
-    if (!selectedId) return;
-    const element = elements.find(el => el.id === selectedId);
-    if (!element || element.type !== 'image') return;
-    setCropMode(true);
-  };
-
-  const applyCrop = () => {
-    if (!selectedId || !cropRect) return;
-    
-    updateElements(elements.map(el => {
-      if (el.id !== selectedId || el.type !== 'image') return el;
-      
-      return {
-        ...el,
-        cropX: cropRect.x,
-        cropY: cropRect.y,
-        cropWidth: cropRect.width,
-        cropHeight: cropRect.height,
-      };
-    }));
-    
-    setCropMode(false);
-    setCropRect(null);
-  };
-
   const handleSave = () => {
     const layoutConfig = {
       pages: pages.map(page => ({
         id: page.id,
         elements: page.elements.map((el) => {
-          const { draggable, ...rest } = el;
+          const rest = { ...el };
+          delete rest.draggable;
           return rest;
         }),
       })),
@@ -579,7 +556,6 @@ export default function LayoutBuilder({ layout, onSave, selectedCategories = [],
           onSelect={() => handleSelect(element.id)}
           onDragEnd={(e) => handleDragEnd(element.id, e)}
           onTransformEnd={(e) => handleTransformEnd(element.id, e)}
-          imageRefs={imageRefs}
         />
       );
     }
@@ -743,9 +719,7 @@ export default function LayoutBuilder({ layout, onSave, selectedCategories = [],
                 </>
               )}
               {selectedElement?.type === 'image' && (
-                <Button size="sm" variant="outline" onClick={startCrop} title="Crop Image">
-                  <Crop className="w-4 h-4" />
-                </Button>
+                null
               )}
               <div className="flex-1" />
               {selectedId && (
@@ -1121,7 +1095,7 @@ export default function LayoutBuilder({ layout, onSave, selectedCategories = [],
   );
 }
 
-function ImageElement({ element, isSelected, onSelect, onDragEnd, onTransformEnd, imageRefs }) {
+function ImageElement({ element, isSelected, onSelect, onDragEnd, onTransformEnd }) {
   const [image, setImage] = useState(null);
   
   useEffect(() => {

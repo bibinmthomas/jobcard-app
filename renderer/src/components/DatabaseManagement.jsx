@@ -25,7 +25,8 @@ export default function DatabaseManagement() {
       queryClient.invalidateQueries(['jobcards']);
       queryClient.invalidateQueries(['layouts']);
       queryClient.invalidateQueries(['fieldCategories']);
-      alert(`Successfully cleared deleted records:\n- ${result.deleted.jobCards} job cards\n- ${result.deleted.layouts} layouts\n- ${result.deleted.categories} categories\n- ${result.deleted.customFields} custom fields`);
+      queryClient.invalidateQueries(['accounts']);
+      alert(`Successfully cleared deleted records:\n- ${result.deleted.jobCards} job cards\n- ${result.deleted.layouts} layouts\n- ${result.deleted.categories} categories\n- ${result.deleted.customFields} custom fields\n- ${result.deleted.accounts} accounts`);
       setShowClearDeletedConfirm(false);
     },
     onError: (error) => {
@@ -41,6 +42,7 @@ export default function DatabaseManagement() {
       queryClient.invalidateQueries(['jobcards']);
       queryClient.invalidateQueries(['layouts']);
       queryClient.invalidateQueries(['fieldCategories']);
+      queryClient.invalidateQueries(['accounts']);
       alert('All database data has been cleared successfully.');
       setShowClearAllConfirm(false);
     },
@@ -83,8 +85,18 @@ export default function DatabaseManagement() {
     );
   }
 
-  const totalRecords = stats.jobCards.total + stats.layouts.total + stats.categories.total + stats.customFields.total;
-  const deletedRecords = stats.jobCards.deleted + stats.layouts.deleted + stats.categories.deleted + stats.customFields.deleted;
+  const totalRecords =
+    stats.jobCards.total +
+    stats.layouts.total +
+    stats.categories.total +
+    stats.customFields.total +
+    stats.accounts.total;
+  const deletedRecords =
+    stats.jobCards.deleted +
+    stats.layouts.deleted +
+    stats.categories.deleted +
+    stats.customFields.deleted +
+    stats.accounts.deleted;
   const estimatedSize = formatBytes(totalRecords);
   const deletedSize = formatBytes(deletedRecords);
 
@@ -185,6 +197,17 @@ export default function DatabaseManagement() {
                 <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400">
                   <span>Active: {stats.customFields.active}</span>
                   <span className="text-red-600 dark:text-red-400">Deleted: {stats.customFields.deleted}</span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Accounts</span>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">{stats.accounts.total} total</span>
+                </div>
+                <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400">
+                  <span>Active: {stats.accounts.active}</span>
+                  <span className="text-red-600 dark:text-red-400">Deleted: {stats.accounts.deleted}</span>
                 </div>
               </div>
             </div>

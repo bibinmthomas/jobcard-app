@@ -15,11 +15,31 @@ model JobCard {
   title        String
   description  String?
   customData   String?  // JSON string for custom fields
+  accountId    Int
+  account      Account  @relation(fields: [accountId], references: [id])
   layoutId     Int?
   layout       Layout?  @relation(fields: [layoutId], references: [id])
   isDeleted    Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+model Account {
+  id            Int       @id @default(autoincrement())
+  name          String
+  address       String
+  city          String
+  pin           Int
+  telephone     String
+  fax           String?
+  telex         String?
+  contactPerson String?
+  isDeleted     Boolean   @default(false)
+  jobCards      JobCard[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([name, city])
 }
 
 model FieldCategory {

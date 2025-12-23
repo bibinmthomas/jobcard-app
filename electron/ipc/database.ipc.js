@@ -18,6 +18,8 @@ function setupDatabaseIPC(ipcMain) {
         deletedCategories,
         totalCustomFields,
         deletedCustomFields,
+        totalAccounts,
+        deletedAccounts,
       ] = await Promise.all([
         prisma.jobCard.count(),
         prisma.jobCard.count({ where: { isDeleted: true } }),
@@ -27,6 +29,8 @@ function setupDatabaseIPC(ipcMain) {
         prisma.fieldCategory.count({ where: { isDeleted: true } }),
         prisma.customField.count(),
         prisma.customField.count({ where: { isDeleted: true } }),
+        prisma.account.count(),
+        prisma.account.count({ where: { isDeleted: true } }),
       ]);
 
       return {
@@ -49,6 +53,11 @@ function setupDatabaseIPC(ipcMain) {
           total: totalCustomFields,
           active: totalCustomFields - deletedCustomFields,
           deleted: deletedCustomFields,
+        },
+        accounts: {
+          total: totalAccounts,
+          active: totalAccounts - deletedAccounts,
+          deleted: deletedAccounts,
         },
       };
     } catch (error) {
@@ -99,7 +108,12 @@ function setupDatabaseIPC(ipcMain) {
           where: { isDeleted: true }
         });
 
-        // 5. Finally, delete categories (now safe, no custom fields or layout-categories reference them)
+        // 5. Delete accounts (only soft-deleted ones)
+        const accounts = await tx.account.deleteMany({
+          where: { isDeleted: true }
+        });
+
+        // 6. Finally, delete categories (now safe, no custom fields or layout-categories reference them)
         const categories = await tx.fieldCategory.deleteMany({
           where: { isDeleted: true }
         });
@@ -110,6 +124,7 @@ function setupDatabaseIPC(ipcMain) {
           categories: categories.count,
           customFields: customFields.count,
           layoutCategories: layoutCategories.count,
+          accounts: accounts.count,
         };
       });
 
@@ -130,6 +145,7 @@ function setupDatabaseIPC(ipcMain) {
         await tx.jobCard.deleteMany({});
         await tx.layout.deleteMany({});
         await tx.fieldCategory.deleteMany({});
+        await tx.account.deleteMany({});
         // Keep AppSettings as they're configuration
       });
 

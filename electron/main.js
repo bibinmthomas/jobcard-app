@@ -11,6 +11,7 @@ const setupPdfIPC = require('./ipc/pdf.ipc');
 const setupFileSystemIPC = require('./ipc/fileSystem.ipc');
 const setupAppSettingsIPC = require('./ipc/appSettings.ipc');
 const setupDatabaseIPC = require('./ipc/database.ipc');
+const setupAccountsIPC = require('./ipc/accounts.ipc');
 
 let mainWindow;
 
@@ -53,6 +54,7 @@ function setupIPCHandlers() {
   setupFileSystemIPC(ipcMain);
   setupAppSettingsIPC(ipcMain);
   setupDatabaseIPC(ipcMain);
+  setupAccountsIPC(ipcMain);
 }
 
 app.whenReady().then(() => {

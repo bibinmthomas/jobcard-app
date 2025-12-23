@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect } from 'react';
 import { useSettings } from '../hooks/useSettings';
 import { api } from '../utils/api';
@@ -15,10 +16,11 @@ export default function AdminSettings() {
 
   useEffect(() => {
     // Load export path from settings
-    if (settings.exportPath) {
-      setExportPath(settings.exportPath.value);
+    const value = settings?.exportPath?.value;
+    if (value !== undefined && value !== null) {
+      setExportPath((prev) => (prev === value ? prev : value));
     }
-  }, [settings]);
+  }, [settings?.exportPath?.value]);
 
   const handleSelectFolder = async () => {
     try {

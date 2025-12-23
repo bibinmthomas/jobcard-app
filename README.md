@@ -71,7 +71,7 @@ The application uses Electron's IPC (Inter-Process Communication) pattern:
 This architecture ensures security by isolating the renderer process from Node.js APIs while maintaining efficient communication.
 
 ## Database Schema
-
+ - To open prisma studio - npx prisma studio --schema "electron/prisma/schema.prisma"
 ### Core Models
 
 - **JobCard** - Main job card entities with title, description, and layout association

@@ -1,11 +1,8 @@
-import { useState } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Trash2, Edit, FileDown } from 'lucide-react';
 
 export default function JobCardList({ jobCards, onEdit, onDelete, onGeneratePDF }) {
-  const [selectedLayout, setSelectedLayout] = useState(null);
-
   if (jobCards.length === 0) {
     return (
       <Card>
@@ -24,6 +21,9 @@ export default function JobCardList({ jobCards, onEdit, onDelete, onGeneratePDF 
             <div className="flex justify-between items-start">
               <div>
                 <CardTitle className="text-xl">{jobCard.title}</CardTitle>
+                {jobCard.account && (
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Account: {jobCard.account.name}</p>
+                )}
                 {jobCard.description && (
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{jobCard.description}</p>
                 )}

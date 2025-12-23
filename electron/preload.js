@@ -14,6 +14,15 @@ contextBridge.exposeInMainWorld('api', {
     delete: (id) => ipcRenderer.invoke('jobcards:delete', id),
   },
 
+  // Accounts
+  accounts: {
+    list: () => ipcRenderer.invoke('accounts:list'),
+    get: (id) => ipcRenderer.invoke('accounts:get', id),
+    create: (data) => ipcRenderer.invoke('accounts:create', data),
+    update: (id, data) => ipcRenderer.invoke('accounts:update', { id, data }),
+    delete: (id) => ipcRenderer.invoke('accounts:delete', id),
+  },
+
   // Field Categories
   fieldCategories: {
     list: () => ipcRenderer.invoke('fieldCategories:list'),

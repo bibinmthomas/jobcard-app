@@ -12,6 +12,14 @@ export const api = {
     delete: (id) => window.api.jobcards.delete(id),
   },
 
+  accounts: {
+    getAll: () => window.api.accounts.list(),
+    get: (id) => window.api.accounts.get(id),
+    create: (data) => window.api.accounts.create(data),
+    update: (id, data) => window.api.accounts.update(id, data),
+    delete: (id) => window.api.accounts.delete(id),
+  },
+
   fieldCategories: {
     getAll: () => window.api.fieldCategories.list(),
     get: (id) => window.api.fieldCategories.get(id),

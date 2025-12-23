@@ -33,6 +33,7 @@ function Navigation() {
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex justify-between h-16">
           <div className="flex space-x-8">
+            {/* eslint-disable-next-line no-unused-vars */}
             {navItems.map(({ path, label, icon: Icon }) => (
               <Link
                 key={path}

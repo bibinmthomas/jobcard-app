@@ -3,13 +3,15 @@ import AdminFieldCategories from '../components/AdminFieldCategories';
 import CategoryFieldManager from '../components/CategoryFieldManager';
 import AdminSettings from '../components/AdminSettings';
 import DatabaseManagement from '../components/DatabaseManagement';
+import AdminAccounts from '../components/AdminAccounts';
 import { FolderTree, FileText, Database } from 'lucide-react';
 
 export default function Admin() {
-  const [activeTab, setActiveTab] = useState('categories');
+  const [activeTab, setActiveTab] = useState('accounts');
   const [selectedCategory, setSelectedCategory] = useState(null);
 
   const tabs = [
+    { id: 'accounts', label: 'Accounts', icon: FileText },
     { id: 'categories', label: 'Field Categories', icon: FolderTree },
     { id: 'settings', label: 'Settings', icon: FileText },
     { id: 'database', label: 'Database', icon: Database },
@@ -63,6 +65,8 @@ export default function Admin() {
               category={selectedCategory}
               onBack={handleBackToCategories}
             />
+          ) : activeTab === 'accounts' ? (
+            <AdminAccounts />
           ) : activeTab === 'categories' ? (
             <AdminFieldCategories onSelectCategory={handleSelectCategory} />
           ) : activeTab === 'settings' ? (
