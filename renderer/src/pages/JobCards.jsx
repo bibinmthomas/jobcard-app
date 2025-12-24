@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useJobCards } from '../hooks/useJobCards';
 import { useLayouts } from '../hooks/useLayouts';
+import { useAccounts } from '../hooks/useAccounts';
 import JobCardForm from '../components/JobCardForm';
 import JobCardList from '../components/JobCardList';
 import { Button } from '../components/ui/button';
@@ -9,8 +10,17 @@ import { api } from '../utils/api';
 export default function JobCards() {
   const { jobCards, createJobCard, updateJobCard, deleteJobCard } = useJobCards();
   const { layouts } = useLayouts();
+  const { accounts } = useAccounts();
   const [isCreating, setIsCreating] = useState(false);
   const [editingCard, setEditingCard] = useState(null);
+  const [selectedAccountId, setSelectedAccountId] = useState('all');
+
+  const filteredJobCards = useMemo(() => {
+    if (selectedAccountId === 'all') {
+      return jobCards;
+    }
+    return jobCards.filter(card => card.accountId === parseInt(selectedAccountId));
+  }, [jobCards, selectedAccountId]);
 
   const handleCreate = (data) => {
     createJobCard(data);
@@ -55,9 +65,26 @@ export default function JobCards() {
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Job Cards</h1>
-        {!isCreating && !editingCard && (
-          <Button onClick={() => setIsCreating(true)}>Create New Job Card</Button>
-        )}
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600 dark:text-gray-400">Account:</label>
+            <select
+              className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={selectedAccountId}
+              onChange={(e) => setSelectedAccountId(e.target.value)}
+            >
+              <option value="all">All Accounts</option>
+              {accounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {!isCreating && !editingCard && (
+            <Button onClick={() => setIsCreating(true)}>Create New Job Card</Button>
+          )}
+        </div>
       </div>
 
       {isCreating && (
@@ -80,7 +107,7 @@ export default function JobCards() {
       )}
 
       <JobCardList
-        jobCards={jobCards}
+        jobCards={filteredJobCards}
         onEdit={handleEdit}
         onDelete={handleDelete}
         onGeneratePDF={handleGeneratePDF}

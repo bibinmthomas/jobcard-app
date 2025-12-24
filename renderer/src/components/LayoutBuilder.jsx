@@ -245,6 +245,8 @@ export default function LayoutBuilder({ layout, onSave, selectedCategories = [],
     const tableWidth = tableConfig.cols * cellWidth;
     const tableHeight = tableConfig.rows * cellHeight;
     
+    const columnWidths = Array(tableConfig.cols).fill(cellWidth);
+    
     const cells = [];
     for (let row = 0; row < tableConfig.rows; row++) {
       for (let col = 0; col < tableConfig.cols; col++) {
@@ -252,8 +254,6 @@ export default function LayoutBuilder({ layout, onSave, selectedCategories = [],
           row,
           col,
           text: '',
-          width: cellWidth,
-          height: cellHeight,
         });
       }
     }
@@ -266,7 +266,7 @@ export default function LayoutBuilder({ layout, onSave, selectedCategories = [],
       rows: tableConfig.rows,
       cols: tableConfig.cols,
       cells: cells,
-      cellWidth: cellWidth,
+      columnWidths: columnWidths,
       cellHeight: cellHeight,
       width: tableWidth,
       height: tableHeight,
@@ -292,8 +292,6 @@ export default function LayoutBuilder({ layout, onSave, selectedCategories = [],
         row: newRow,
         col,
         text: '',
-        width: element.cellWidth,
-        height: element.cellHeight,
       });
     }
     
@@ -316,16 +314,17 @@ export default function LayoutBuilder({ layout, onSave, selectedCategories = [],
     
     const newCol = element.cols;
     const newCells = [...element.cells];
+    const defaultColWidth = 100;
     
     for (let row = 0; row < element.rows; row++) {
       newCells.push({
         row,
         col: newCol,
         text: '',
-        width: element.cellWidth,
-        height: element.cellHeight,
       });
     }
+    
+    const newColumnWidths = [...(element.columnWidths || []), defaultColWidth];
     
     updateElements(elements.map(el => 
       el.id === selectedId 
@@ -333,7 +332,8 @@ export default function LayoutBuilder({ layout, onSave, selectedCategories = [],
             ...el, 
             cols: el.cols + 1, 
             cells: newCells,
-            width: (el.cols + 1) * el.cellWidth
+            columnWidths: newColumnWidths,
+            width: newColumnWidths.reduce((sum, w) => sum + w, 0)
           } 
         : el
     ));
@@ -366,6 +366,7 @@ export default function LayoutBuilder({ layout, onSave, selectedCategories = [],
     
     const newCols = element.cols - 1;
     const newCells = element.cells.filter(cell => cell.col < newCols);
+    const newColumnWidths = (element.columnWidths || []).slice(0, newCols);
     
     updateElements(elements.map(el => 
       el.id === selectedId 
@@ -373,7 +374,27 @@ export default function LayoutBuilder({ layout, onSave, selectedCategories = [],
             ...el, 
             cols: newCols, 
             cells: newCells,
-            width: newCols * el.cellWidth
+            columnWidths: newColumnWidths,
+            width: newColumnWidths.reduce((sum, w) => sum + w, 0)
+          } 
+        : el
+    ));
+  };
+
+  const updateColumnWidth = (colIndex, newWidth) => {
+    if (!selectedId) return;
+    const element = elements.find(el => el.id === selectedId);
+    if (!element || element.type !== 'table') return;
+    
+    const columnWidths = element.columnWidths || Array(element.cols).fill(100);
+    const newColumnWidths = columnWidths.map((w, i) => i === colIndex ? Math.max(30, newWidth) : w);
+    
+    updateElements(elements.map(el => 
+      el.id === selectedId 
+        ? { 
+            ...el, 
+            columnWidths: newColumnWidths,
+            width: newColumnWidths.reduce((sum, w) => sum + w, 0)
           } 
         : el
     ));
@@ -432,8 +453,11 @@ export default function LayoutBuilder({ layout, onSave, selectedCategories = [],
       if (el.type === 'table') {
         const newWidth = Math.max(el.cols * 30, node.width() * scaleX);
         const newHeight = Math.max(el.rows * 20, node.height() * scaleY);
-        const newCellWidth = newWidth / el.cols;
         const newCellHeight = newHeight / el.rows;
+        
+        const oldTotalWidth = el.width || (el.columnWidths || []).reduce((sum, w) => sum + w, el.cols * 100);
+        const widthRatio = newWidth / oldTotalWidth;
+        const newColumnWidths = (el.columnWidths || Array(el.cols).fill(100)).map(w => w * widthRatio);
         
         return {
           ...el,
@@ -441,13 +465,8 @@ export default function LayoutBuilder({ layout, onSave, selectedCategories = [],
           y: node.y(),
           width: newWidth,
           height: newHeight,
-          cellWidth: newCellWidth,
+          columnWidths: newColumnWidths,
           cellHeight: newCellHeight,
-          cells: el.cells.map(cell => ({
-            ...cell,
-            width: newCellWidth,
-            height: newCellHeight,
-          })),
         };
       }
       
@@ -1078,6 +1097,31 @@ export default function LayoutBuilder({ layout, onSave, selectedCategories = [],
                       </div>
                     ))}
                   </div>
+                  
+                  {/* Column Widths */}
+                  <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-700">
+                    <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Column Widths</p>
+                    <div className="flex gap-1 flex-wrap">
+                      {Array.from({ length: selectedElement.cols }).map((_, colIdx) => {
+                        const colWidths = selectedElement.columnWidths || Array(selectedElement.cols).fill(100);
+                        return (
+                          <div key={colIdx} className="flex-1 min-w-[60px]">
+                            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-0.5 text-center">
+                              Col {colIdx + 1}
+                            </label>
+                            <Input
+                              type="number"
+                              min="30"
+                              max="300"
+                              className="text-xs p-1 text-center"
+                              value={Math.round(colWidths[colIdx] || 100)}
+                              onChange={(e) => updateColumnWidth(colIdx, parseInt(e.target.value) || 100)}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -1134,12 +1178,16 @@ function ImageElement({ element, isSelected, onSelect, onDragEnd, onTransformEnd
 }
 
 function TableElement({ element, isSelected, onSelect, onDragEnd, onTransformEnd }) {
-  const { x, y, rows, cols, cells, cellWidth, cellHeight, borderColor, fontSize, fontFamily, width, height } = element;
+  const { x, y, rows, cols, cells, columnWidths, cellHeight, borderColor, fontSize, fontFamily, width, height } = element;
   
-  const tableWidth = width || cols * cellWidth;
+  const colWidths = columnWidths || Array(cols).fill(100);
+  const tableWidth = width || colWidths.reduce((sum, w) => sum + w, 0);
   const tableHeight = height || rows * cellHeight;
-  const actualCellWidth = tableWidth / cols;
   const actualCellHeight = tableHeight / rows;
+  
+  const getColumnX = (colIndex) => {
+    return colWidths.slice(0, colIndex).reduce((sum, w) => sum + w, 0);
+  };
   
   return (
     <Group
@@ -1174,31 +1222,38 @@ function TableElement({ element, isSelected, onSelect, onDragEnd, onTransformEnd
       ))}
       
       {/* Vertical lines */}
-      {Array.from({ length: cols + 1 }).map((_, i) => (
-        <Line
-          key={`v-${i}`}
-          points={[i * actualCellWidth, 0, i * actualCellWidth, tableHeight]}
-          stroke={borderColor}
-          strokeWidth={1}
-        />
-      ))}
+      {Array.from({ length: cols + 1 }).map((_, i) => {
+        const xPos = getColumnX(i);
+        return (
+          <Line
+            key={`v-${i}`}
+            points={[xPos, 0, xPos, tableHeight]}
+            stroke={borderColor}
+            strokeWidth={1}
+          />
+        );
+      })}
       
       {/* Cell text */}
-      {cells.map((cell, idx) => (
-        <Text
-          key={idx}
-          x={cell.col * actualCellWidth + 4}
-          y={cell.row * actualCellHeight + (actualCellHeight - fontSize) / 2}
-          width={actualCellWidth - 8}
-          height={actualCellHeight}
-          text={cell.text}
-          fontSize={fontSize}
-          fontFamily={fontFamily}
-          fill="#000000"
-          align="left"
-          verticalAlign="middle"
-        />
-      ))}
+      {cells.map((cell) => {
+        const cellX = getColumnX(cell.col);
+        const cellW = colWidths[cell.col] || 100;
+        return (
+          <Text
+            key={`${cell.row}-${cell.col}`}
+            x={cellX + 4}
+            y={cell.row * actualCellHeight + (actualCellHeight - fontSize) / 2}
+            width={cellW - 8}
+            height={actualCellHeight}
+            text={cell.text}
+            fontSize={fontSize}
+            fontFamily={fontFamily}
+            fill="#000000"
+            align="left"
+            verticalAlign="middle"
+          />
+        );
+      })}
     </Group>
   );
 }
