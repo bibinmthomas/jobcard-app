@@ -12,7 +12,7 @@ import {
 
 const A4_WIDTH = 595;
 const A4_HEIGHT = 842;
-const SCALE = 0.7;
+const SCALE = 1.0;
 
 const FONT_FAMILIES = [
   'Helvetica',
@@ -735,7 +735,7 @@ export default function LayoutBuilder({ layout, onSave, selectedCategories = [],
             </div>
 
             {/* Canvas */}
-            <div className="col-span-7">
+            <div className="col-span-8">
               <div className="border-2 border-gray-300 dark:border-gray-600 rounded inline-block bg-white dark:bg-gray-800 overflow-hidden">
                 <Stage
                   width={A4_WIDTH * SCALE}
@@ -782,7 +782,7 @@ export default function LayoutBuilder({ layout, onSave, selectedCategories = [],
             </div>
 
             {/* Controls Panel */}
-            <div className="col-span-5 space-y-4 max-h-[600px] overflow-y-auto pr-2">
+            <div className="col-span-4 space-y-4 max-h-[842px] overflow-y-auto pr-2">
               {/* Add Text */}
               <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded">
                 <h3 className="font-semibold mb-2 text-gray-900 dark:text-gray-100 flex items-center gap-2">
