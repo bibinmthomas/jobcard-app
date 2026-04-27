@@ -1,73 +1,71 @@
 /**
- * API layer for communicating with Electron main process
- * Uses the window.api object exposed via preload.js
+ * API layer — thin wrapper over window.api (exposed by preload.js via contextBridge).
+ * All renderer code should import from here rather than calling window.api directly.
  */
 
 export const api = {
+  // ── Auth ────────────────────────────────────────────────────────────────────
+  auth: {
+    hasUsers:   ()       => window.api.auth.hasUsers(),
+    register:   (data)   => window.api.auth.register(data),
+    login:      (data)   => window.api.auth.login(data),
+    logout:     ()       => window.api.auth.logout(),
+    getSession: ()       => window.api.auth.getSession(),
+  },
+
+  // ── Job Cards ────────────────────────────────────────────────────────────────
   jobcards: {
-    getAll: () => window.api.jobcards.list(),
-    get: (id) => window.api.jobcards.get(id),
-    create: (data) => window.api.jobcards.create(data),
-    update: (id, data) => window.api.jobcards.update(id, data),
-    delete: (id) => window.api.jobcards.delete(id),
+    list:   ()           => window.api.jobcards.list(),
+    get:    (id)         => window.api.jobcards.get(id),
+    create: (data)       => window.api.jobcards.create(data),
+    update: (id, data)   => window.api.jobcards.update(id, data),
+    delete: (id)         => window.api.jobcards.delete(id),
   },
 
+  // ── Accounts ─────────────────────────────────────────────────────────────────
   accounts: {
-    getAll: () => window.api.accounts.list(),
-    get: (id) => window.api.accounts.get(id),
-    create: (data) => window.api.accounts.create(data),
-    update: (id, data) => window.api.accounts.update(id, data),
-    delete: (id) => window.api.accounts.delete(id),
+    list:   ()           => window.api.accounts.list(),
+    get:    (id)         => window.api.accounts.get(id),
+    create: (data)       => window.api.accounts.create(data),
+    update: (id, data)   => window.api.accounts.update(id, data),
+    delete: (id)         => window.api.accounts.delete(id),
   },
 
-  fieldCategories: {
-    getAll: () => window.api.fieldCategories.list(),
-    get: (id) => window.api.fieldCategories.get(id),
-    create: (data) => window.api.fieldCategories.create(data),
-    update: (id, data) => window.api.fieldCategories.update(id, data),
-    delete: (id) => window.api.fieldCategories.delete(id),
+  // ── Form Fields ───────────────────────────────────────────────────────────────
+  formFields: {
+    list:   ()           => window.api.formFields.list(),
+    create: (data)       => window.api.formFields.create(data),
+    update: (id, data)   => window.api.formFields.update(id, data),
+    delete: (id)         => window.api.formFields.delete(id),
   },
 
-  customFields: {
-    getAll: () => window.api.customFields.list(),
-    create: (data) => window.api.customFields.create(data),
-    update: (id, data) => window.api.customFields.update(id, data),
-    delete: (id) => window.api.customFields.delete(id),
-  },
-
-  layouts: {
-    getAll: () => window.api.layouts.list(),
-    get: (id) => window.api.layouts.get(id),
-    create: (data) => window.api.layouts.create(data),
-    update: (id, data) => window.api.layouts.update(id, data),
-    delete: (id) => window.api.layouts.delete(id),
-  },
-
+  // ── PDF ───────────────────────────────────────────────────────────────────────
   pdf: {
-    generate: (jobCardId, layoutId) => window.api.pdf.generate(jobCardId, layoutId),
-    import: (filePath) => window.api.pdf.import(filePath),
-    export: (jobCardId, layoutId) => window.api.pdf.export(jobCardId, layoutId),
-    getExportPath: (filename) => window.api.pdf.getExportPath(filename),
+    saveToDisk:   (payload) => window.api.pdf.saveToDisk(payload),
+    getExportDir: ()        => window.api.pdf.getExportDir(),
   },
 
+  // ── File System ───────────────────────────────────────────────────────────────
   fileSystem: {
-    readFile: (filePath) => window.api.fileSystem.readFile(filePath),
-    writeFile: (filePath, data) => window.api.fileSystem.writeFile(filePath, data),
-    selectFile: (options) => window.api.fileSystem.selectFile(options),
-    saveFile: (options) => window.api.fileSystem.saveFile(options),
-    selectFolder: (options) => window.api.fileSystem.selectFolder(options),
+    readFile:     (fp)      => window.api.fileSystem.readFile(fp),
+    writeFile:    (fp, data)=> window.api.fileSystem.writeFile(fp, data),
+    selectFile:   (opts)    => window.api.fileSystem.selectFile(opts),
+    saveFile:     (opts)    => window.api.fileSystem.saveFile(opts),
+    selectFolder: (opts)    => window.api.fileSystem.selectFolder(opts),
   },
 
+  // ── Settings ──────────────────────────────────────────────────────────────────
   settings: {
-    get: (key) => window.api.settings.get(key),
-    getAll: () => window.api.settings.getAll(),
-    set: (key, value) => window.api.settings.set(key, value),
-    getExportPath: () => window.api.settings.getExportPath(),
+    get:           (key)        => window.api.settings.get(key),
+    getAll:        ()           => window.api.settings.getAll(),
+    set:           (key, value) => window.api.settings.set(key, value),
+    getExportPath: ()           => window.api.settings.getExportPath(),
   },
 
+  // ── Database ──────────────────────────────────────────────────────────────────
   database: {
-    getStats: () => window.api.database.getStats(),
+    getStats:     () => window.api.database.getStats(),
     clearDeleted: () => window.api.database.clearDeleted(),
-    clearAll: () => window.api.database.clearAll(),
+    clearAll:     () => window.api.database.clearAll(),
   },
 };

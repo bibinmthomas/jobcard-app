@@ -1,317 +1,170 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../utils/api';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
-import { Button } from './ui/button';
-import { Trash2, Database, HardDrive, AlertTriangle } from 'lucide-react';
+import { Trash2, Database, AlertTriangle, RefreshCw } from 'lucide-react';
+
+function StatRow({ label, active, deleted }) {
+  return (
+    <div className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
+      <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
+      <div className="flex gap-4 text-sm">
+        <span className="text-gray-900 dark:text-gray-100 font-medium">{active} active</span>
+        {deleted > 0 && (
+          <span className="text-red-500 font-medium">{deleted} deleted</span>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function DatabaseManagement() {
   const queryClient = useQueryClient();
-  const [showClearAllConfirm, setShowClearAllConfirm] = useState(false);
-  const [showClearDeletedConfirm, setShowClearDeletedConfirm] = useState(false);
+  const [confirmBin, setConfirmBin]   = useState(false);
+  const [confirmAll, setConfirmAll]   = useState(false);
+  const [message, setMessage]         = useState('');
 
-  // Fetch database statistics
   const { data: stats, isLoading } = useQuery({
     queryKey: ['database', 'stats'],
     queryFn: () => api.database.getStats(),
-    refetchInterval: 5000, // Refresh every 5 seconds
+    refetchInterval: 5000,
   });
 
-  // Mutation for clearing deleted records
   const clearDeletedMutation = useMutation({
     mutationFn: () => api.database.clearDeleted(),
-    onSuccess: (result) => {
-      queryClient.invalidateQueries(['database', 'stats']);
-      queryClient.invalidateQueries(['jobcards']);
-      queryClient.invalidateQueries(['layouts']);
-      queryClient.invalidateQueries(['fieldCategories']);
-      queryClient.invalidateQueries(['accounts']);
-      alert(`Successfully cleared deleted records:\n- ${result.deleted.jobCards} job cards\n- ${result.deleted.layouts} layouts\n- ${result.deleted.categories} categories\n- ${result.deleted.customFields} custom fields\n- ${result.deleted.accounts} accounts`);
-      setShowClearDeletedConfirm(false);
+    onSuccess: (res) => {
+      queryClient.invalidateQueries();
+      const counts = res.deleted || {};
+      setMessage(`Recycle bin emptied. Removed: ${Object.entries(counts).map(([k, v]) => `${v} ${k}`).join(', ')}`);
+      setConfirmBin(false);
     },
-    onError: (error) => {
-      alert('Error clearing deleted records: ' + error.message);
-    },
+    onError: (err) => { setMessage(`Error: ${err.message}`); setConfirmBin(false); },
   });
 
-  // Mutation for clearing all database data
   const clearAllMutation = useMutation({
     mutationFn: () => api.database.clearAll(),
     onSuccess: () => {
-      queryClient.invalidateQueries(['database', 'stats']);
-      queryClient.invalidateQueries(['jobcards']);
-      queryClient.invalidateQueries(['layouts']);
-      queryClient.invalidateQueries(['fieldCategories']);
-      queryClient.invalidateQueries(['accounts']);
-      alert('All database data has been cleared successfully.');
-      setShowClearAllConfirm(false);
+      queryClient.invalidateQueries();
+      setMessage('All data cleared. Settings and users preserved.');
+      setConfirmAll(false);
     },
-    onError: (error) => {
-      alert('Error clearing database: ' + error.message);
-    },
+    onError: (err) => { setMessage(`Error: ${err.message}`); setConfirmAll(false); },
   });
 
-  const handleClearDeleted = () => {
-    if (showClearDeletedConfirm) {
-      clearDeletedMutation.mutate();
-    } else {
-      setShowClearDeletedConfirm(true);
-    }
-  };
-
-  const handleClearAll = () => {
-    if (showClearAllConfirm) {
-      clearAllMutation.mutate();
-    } else {
-      setShowClearAllConfirm(true);
-    }
-  };
-
-  const formatBytes = (total) => {
-    // Rough estimate: assume 1KB per record on average
-    const bytes = total * 1024;
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
-  };
-
-  if (isLoading) {
-    return (
-      <div className="text-center py-8 text-gray-600 dark:text-gray-400">
-        Loading database statistics...
-      </div>
-    );
-  }
-
-  const totalRecords =
-    stats.jobCards.total +
-    stats.layouts.total +
-    stats.categories.total +
-    stats.customFields.total +
-    stats.accounts.total;
-  const deletedRecords =
-    stats.jobCards.deleted +
-    stats.layouts.deleted +
-    stats.categories.deleted +
-    stats.customFields.deleted +
-    stats.accounts.deleted;
-  const estimatedSize = formatBytes(totalRecords);
-  const deletedSize = formatBytes(deletedRecords);
+  const hasDeleted = stats
+    ? (stats.jobCards?.deleted || 0) + (stats.accounts?.deleted || 0) + (stats.formFields?.deleted || 0) > 0
+    : false;
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Database Management</h2>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-          Monitor database usage and manage storage
-        </p>
+        <h2 className="font-semibold text-gray-900 dark:text-gray-100">Database Management</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Monitor data and perform maintenance operations.</p>
       </div>
 
-      {/* Database Statistics */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Database className="w-5 h-5" />
-            Database Statistics
-          </CardTitle>
-          <CardDescription>Current database storage and record counts</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 gap-6">
-            {/* Overall Stats */}
-            <div className="space-y-4">
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100">Overall</h3>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Total Records</span>
-                  <span className="font-semibold text-gray-900 dark:text-gray-100">{totalRecords}</span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Estimated Size</span>
-                  <span className="font-semibold text-gray-900 dark:text-gray-100">{estimatedSize}</span>
-                </div>
-              </div>
-            </div>
+      {message && (
+        <div className="px-4 py-3 text-sm rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+          {message}
+        </div>
+      )}
 
-            {/* Deleted Stats */}
-            <div className="space-y-4">
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100">Recycle Bin</h3>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center p-3 bg-red-50 dark:bg-red-900/20 rounded">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Deleted Records</span>
-                  <span className="font-semibold text-red-600 dark:text-red-400">{deletedRecords}</span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-red-50 dark:bg-red-900/20 rounded">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Recoverable Space</span>
-                  <span className="font-semibold text-red-600 dark:text-red-400">{deletedSize}</span>
-                </div>
-              </div>
+      {/* Stats */}
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 shadow-sm">
+        <div className="flex items-center gap-2 mb-3">
+          <Database className="w-4 h-4 text-gray-500" />
+          <h3 className="font-medium text-gray-900 dark:text-gray-100">Record Counts</h3>
+          {isLoading && <RefreshCw className="w-3.5 h-3.5 text-gray-400 animate-spin ml-auto" />}
+        </div>
+        {stats ? (
+          <div>
+            <StatRow label="Job Cards"    active={stats.jobCards?.active   || 0} deleted={stats.jobCards?.deleted   || 0} />
+            <StatRow label="Accounts"     active={stats.accounts?.active   || 0} deleted={stats.accounts?.deleted   || 0} />
+            <StatRow label="Form Fields"  active={stats.formFields?.active || 0} deleted={stats.formFields?.deleted || 0} />
+            <div className="flex items-center justify-between pt-2 mt-1">
+              <span className="text-sm text-gray-500 dark:text-gray-400">Users</span>
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{stats.users?.total || 0}</span>
             </div>
           </div>
+        ) : (
+          <p className="text-sm text-gray-500 dark:text-gray-400">Loading stats…</p>
+        )}
+      </div>
 
-          {/* Detailed Breakdown */}
-          <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4">Record Breakdown</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Job Cards</span>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">{stats.jobCards.total} total</span>
-                </div>
-                <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400">
-                  <span>Active: {stats.jobCards.active}</span>
-                  <span className="text-red-600 dark:text-red-400">Deleted: {stats.jobCards.deleted}</span>
-                </div>
-              </div>
-
-              <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Layouts</span>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">{stats.layouts.total} total</span>
-                </div>
-                <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400">
-                  <span>Active: {stats.layouts.active}</span>
-                  <span className="text-red-600 dark:text-red-400">Deleted: {stats.layouts.deleted}</span>
-                </div>
-              </div>
-
-              <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Field Categories</span>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">{stats.categories.total} total</span>
-                </div>
-                <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400">
-                  <span>Active: {stats.categories.active}</span>
-                  <span className="text-red-600 dark:text-red-400">Deleted: {stats.categories.deleted}</span>
-                </div>
-              </div>
-
-              <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Custom Fields</span>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">{stats.customFields.total} total</span>
-                </div>
-                <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400">
-                  <span>Active: {stats.customFields.active}</span>
-                  <span className="text-red-600 dark:text-red-400">Deleted: {stats.customFields.deleted}</span>
-                </div>
-              </div>
-
-              <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Accounts</span>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">{stats.accounts.total} total</span>
-                </div>
-                <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400">
-                  <span>Active: {stats.accounts.active}</span>
-                  <span className="text-red-600 dark:text-red-400">Deleted: {stats.accounts.deleted}</span>
-                </div>
-              </div>
+      {/* Actions */}
+      <div className="space-y-3">
+        {/* Empty recycle bin */}
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 shadow-sm">
+          <div className="flex items-start justify-between">
+            <div>
+              <h3 className="font-medium text-gray-900 dark:text-gray-100">Empty Recycle Bin</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                Permanently delete all soft-deleted records. This cannot be undone.
+              </p>
             </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Management Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <HardDrive className="w-5 h-5" />
-            Storage Management
-          </CardTitle>
-          <CardDescription>Clear deleted records or reset the entire database</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Empty Recycle Bin */}
-          <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-1">Empty Recycle Bin</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                  Permanently delete all soft-deleted records. This will free up {deletedSize} of space.
-                </p>
-                {showClearDeletedConfirm && (
-                  <div className="flex items-center gap-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded mb-3">
-                    <AlertTriangle className="w-4 h-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
-                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                      This will permanently delete {deletedRecords} records. Are you sure?
-                    </p>
-                  </div>
-                )}
-              </div>
-              <div className="flex gap-2 ml-4">
-                {showClearDeletedConfirm && (
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowClearDeletedConfirm(false)}
-                    disabled={clearDeletedMutation.isPending}
-                  >
-                    Cancel
-                  </Button>
-                )}
-                <Button
-                  variant={showClearDeletedConfirm ? 'destructive' : 'outline'}
-                  onClick={handleClearDeleted}
-                  disabled={clearDeletedMutation.isPending || deletedRecords === 0}
+            {!confirmBin ? (
+              <button
+                onClick={() => setConfirmBin(true)}
+                disabled={!hasDeleted}
+                className="px-4 py-2 text-sm font-medium text-orange-600 border border-orange-300 rounded-lg hover:bg-orange-50 dark:hover:bg-orange-900/20 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Trash2 className="w-4 h-4 inline mr-1" />
+                Empty Bin
+              </button>
+            ) : (
+              <div className="flex gap-2">
+                <button onClick={() => setConfirmBin(false)}
+                  className="px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+                  Cancel
+                </button>
+                <button
+                  onClick={() => clearDeletedMutation.mutate()}
+                  disabled={clearDeletedMutation.isPending}
+                  className="px-3 py-1.5 text-sm text-white bg-orange-600 hover:bg-orange-700 rounded-lg font-medium"
                 >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  {clearDeletedMutation.isPending
-                    ? 'Clearing...'
-                    : showClearDeletedConfirm
-                    ? 'Confirm Delete'
-                    : 'Empty Recycle Bin'}
-                </Button>
+                  {clearDeletedMutation.isPending ? 'Working…' : 'Confirm'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Reset all data */}
+        <div className="bg-white dark:bg-gray-800 border border-red-200 dark:border-red-900 rounded-xl p-5 shadow-sm">
+          <div className="flex items-start justify-between">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-medium text-red-700 dark:text-red-400">Reset All Data</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                  Permanently delete <strong>all</strong> job cards, accounts, and form fields.
+                  User accounts and settings are preserved.
+                </p>
               </div>
             </div>
-          </div>
-
-          {/* Reset Database */}
-          <div className="p-4 border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/10 rounded-lg">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <h3 className="font-semibold text-red-900 dark:text-red-100 mb-1">Reset Database</h3>
-                <p className="text-sm text-red-700 dark:text-red-300 mb-3">
-                  Permanently delete ALL data including job cards, layouts, categories, and custom fields. This action cannot be undone!
-                </p>
-                {showClearAllConfirm && (
-                  <div className="flex items-center gap-2 p-3 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded mb-3">
-                    <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0" />
-                    <p className="text-sm text-red-900 dark:text-red-200 font-semibold">
-                      WARNING: This will delete ALL {totalRecords} records permanently. Are you absolutely sure?
-                    </p>
-                  </div>
-                )}
-              </div>
-              <div className="flex gap-2 ml-4">
-                {showClearAllConfirm && (
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowClearAllConfirm(false)}
-                    disabled={clearAllMutation.isPending}
-                  >
-                    Cancel
-                  </Button>
-                )}
-                <Button
-                  variant="destructive"
-                  onClick={handleClearAll}
+            {!confirmAll ? (
+              <button
+                onClick={() => setConfirmAll(true)}
+                className="px-4 py-2 text-sm font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"
+              >
+                Reset All
+              </button>
+            ) : (
+              <div className="flex gap-2">
+                <button onClick={() => setConfirmAll(false)}
+                  className="px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+                  Cancel
+                </button>
+                <button
+                  onClick={() => clearAllMutation.mutate()}
                   disabled={clearAllMutation.isPending}
+                  className="px-3 py-1.5 text-sm text-white bg-red-600 hover:bg-red-700 rounded-lg font-medium"
                 >
-                  <AlertTriangle className="w-4 h-4 mr-2" />
-                  {clearAllMutation.isPending
-                    ? 'Resetting...'
-                    : showClearAllConfirm
-                    ? 'Yes, Delete Everything'
-                    : 'Reset Database'}
-                </Button>
+                  {clearAllMutation.isPending ? 'Clearing…' : 'Yes, Reset'}
+                </button>
               </div>
-            </div>
+            )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

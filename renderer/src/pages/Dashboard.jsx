@@ -1,122 +1,111 @@
 import { useJobCards } from '../hooks/useJobCards';
-import { useLayouts } from '../hooks/useLayouts';
-import { useCustomFields } from '../hooks/useCustomFields';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { FileText, Layout, Settings } from 'lucide-react';
+import { useAccounts } from '../hooks/useAccounts';
+import { useFormFields } from '../hooks/useFormFields';
+import { useAuth } from '../contexts/AuthContext';
+import { FileText, Building2, Sliders, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-export default function Dashboard() {
-  const { jobCards } = useJobCards();
-  const { layouts } = useLayouts();
-  const { customFields } = useCustomFields();
+function StatCard({ icon: Icon, label, value, color, to }) {
+  const content = (
+    <div className={`bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 flex items-center gap-4 shadow-sm hover:shadow-md transition-shadow`}>
+      <div className={`p-3 rounded-xl ${color}`}>
+        <Icon className="w-6 h-6 text-white" />
+      </div>
+      <div>
+        <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{value}</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">{label}</p>
+      </div>
+    </div>
+  );
+  return to ? <Link to={to}>{content}</Link> : content;
+}
 
-  const stats = [
-    {
-      title: 'Total Job Cards',
-      value: jobCards.length,
-      icon: FileText,
-      link: '/jobcards',
-      color: 'text-blue-600',
-      bg: 'bg-blue-100',
-    },
-    {
-      title: 'PDF Layouts',
-      value: layouts.length,
-      icon: Layout,
-      link: '/layouts',
-      color: 'text-green-600',
-      bg: 'bg-green-100',
-    },
-    {
-      title: 'Custom Fields',
-      value: customFields.length,
-      icon: Settings,
-      link: '/admin',
-      color: 'text-purple-600',
-      bg: 'bg-purple-100',
-    },
-  ];
+export default function Dashboard() {
+  const { jobCards }   = useJobCards();
+  const { accounts }   = useAccounts();
+  const { formFields } = useFormFields();
+  const { user }       = useAuth();
+
+  const recent = [...jobCards].slice(0, 5);
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6 text-gray-900 dark:text-gray-100">Dashboard</h1>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        {stats.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <Link key={stat.title} to={stat.link}>
-              <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">{stat.title}</CardTitle>
-                    <div className={`p-3 rounded-full ${stat.bg} dark:bg-opacity-20`}>
-                      <Icon className={`w-6 h-6 ${stat.color} dark:opacity-80`} />
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-gray-900 dark:text-gray-100">{stat.value}</div>
-                </CardContent>
-              </Card>
-            </Link>
-          );
-        })}
+    <div className="max-w-5xl mx-auto px-6 py-8">
+      {/* Welcome */}
+      <div className="mb-7">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+          Welcome back, <span className="text-blue-600">{user?.username}</span>
+        </h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Here's a summary of your job card data.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Job Cards</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {jobCards.length === 0 ? (
-              <p className="text-gray-500 dark:text-gray-400">No job cards yet</p>
-            ) : (
-              <div className="space-y-2">
-                {jobCards.slice(0, 5).map((card) => (
-                  <div
-                    key={card.id}
-                    className="p-3 border border-gray-200 dark:border-gray-700 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
-                  >
-                    <div className="font-medium text-gray-900 dark:text-gray-100">{card.title}</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                      {new Date(card.createdAt).toLocaleDateString()}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-4 mb-8">
+        <StatCard icon={FileText}  label="Job Cards"   value={jobCards.length}   color="bg-blue-500"   to="/jobcards" />
+        <StatCard icon={Building2} label="Accounts"    value={accounts.length}   color="bg-emerald-500" to="/accounts" />
+        <StatCard icon={Sliders}   label="Extra Fields" value={formFields.length} color="bg-purple-500"  to="/admin" />
+      </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <Link
-                to="/jobcards"
-                className="block p-3 border border-gray-200 dark:border-gray-700 rounded hover:bg-gray-50 dark:hover:bg-gray-700 font-medium text-gray-900 dark:text-gray-100"
-              >
-                Create New Job Card
-              </Link>
-              <Link
-                to="/layouts"
-                className="block p-3 border border-gray-200 dark:border-gray-700 rounded hover:bg-gray-50 dark:hover:bg-gray-700 font-medium text-gray-900 dark:text-gray-100"
-              >
-                Create New Layout
-              </Link>
-              <Link
-                to="/admin"
-                className="block p-3 border border-gray-200 dark:border-gray-700 rounded hover:bg-gray-50 dark:hover:bg-gray-700 font-medium text-gray-900 dark:text-gray-100"
-              >
-                Manage Custom Fields
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Quick actions */}
+      <div className="flex gap-3 mb-8">
+        <Link
+          to="/jobcards"
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg"
+        >
+          <Plus className="w-4 h-4" /> New Job Card
+        </Link>
+        <Link
+          to="/accounts"
+          className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 text-sm font-medium rounded-lg"
+        >
+          <Building2 className="w-4 h-4" /> Manage Accounts
+        </Link>
+      </div>
+
+      {/* Recent job cards */}
+      <div>
+        <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-3">
+          Recent Job Cards
+        </h2>
+        {recent.length === 0 ? (
+          <div className="text-sm text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 text-center">
+            No job cards yet.
+          </div>
+        ) : (
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 dark:bg-gray-700">
+                <tr>
+                  {['Job No', 'Account', 'Part Name', 'Date', 'Amount'].map(h => (
+                    <th key={h} className="text-left px-4 py-2.5 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                {recent.map(card => (
+                  <tr key={card.id} className="group hover:bg-blue-50/50 dark:hover:bg-blue-950/20 transition-colors duration-150">
+                    <td className="px-4 py-3 font-mono font-semibold text-blue-600 dark:text-blue-400 border-l-2 border-transparent group-hover:border-blue-400 transition-colors duration-150">
+                      {card.jobNo}
+                    </td>
+                    <td className="px-4 py-3 text-gray-700 dark:text-gray-200 font-medium">
+                      {card.account?.acctName || '—'}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
+                      {card.partName || '—'}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
+                      {new Date(card.date).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
+                      {card.amount || '0.00'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

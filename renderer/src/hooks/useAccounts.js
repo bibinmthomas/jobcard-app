@@ -6,14 +6,13 @@ export function useAccounts() {
 
   const { data: accounts = [], isLoading, error } = useQuery({
     queryKey: ['accounts'],
-    queryFn: () => api.accounts.getAll(),
+    queryFn: () => api.accounts.list(),
   });
 
   const createMutation = useMutation({
     mutationFn: (data) => api.accounts.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
-      queryClient.invalidateQueries({ queryKey: ['jobcards'] });
     },
   });
 
@@ -21,7 +20,6 @@ export function useAccounts() {
     mutationFn: ({ id, data }) => api.accounts.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
-      queryClient.invalidateQueries({ queryKey: ['jobcards'] });
     },
   });
 
@@ -37,9 +35,9 @@ export function useAccounts() {
     accounts,
     isLoading,
     error,
-    createAccount: createMutation.mutate,
-    updateAccount: updateMutation.mutate,
-    deleteAccount: deleteMutation.mutate,
+    createAccount: createMutation.mutateAsync,
+    updateAccount: updateMutation.mutateAsync,
+    deleteAccount: deleteMutation.mutateAsync,
     isCreating: createMutation.isPending,
     isUpdating: updateMutation.isPending,
     isDeleting: deleteMutation.isPending,

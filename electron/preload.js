@@ -1,83 +1,73 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 /**
- * Expose protected methods that allow the renderer process to use
- * the ipcRenderer without exposing the entire object
+ * Expose protected methods to the renderer process via window.api
+ * contextIsolation ensures the renderer cannot access Node.js directly.
  */
 contextBridge.exposeInMainWorld('api', {
-  // Job Cards
+
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  auth: {
+    hasUsers:   ()       => ipcRenderer.invoke('auth:hasUsers'),
+    register:   (data)   => ipcRenderer.invoke('auth:register', data),
+    login:      (data)   => ipcRenderer.invoke('auth:login',    data),
+    logout:     ()       => ipcRenderer.invoke('auth:logout'),
+    getSession: ()       => ipcRenderer.invoke('auth:getSession'),
+  },
+
+  // ── Job Cards ─────────────────────────────────────────────────────────────
   jobcards: {
-    list: () => ipcRenderer.invoke('jobcards:list'),
-    get: (id) => ipcRenderer.invoke('jobcards:get', id),
-    create: (data) => ipcRenderer.invoke('jobcards:create', data),
-    update: (id, data) => ipcRenderer.invoke('jobcards:update', { id, data }),
-    delete: (id) => ipcRenderer.invoke('jobcards:delete', id),
+    list:   ()           => ipcRenderer.invoke('jobcards:list'),
+    get:    (id)         => ipcRenderer.invoke('jobcards:get',    id),
+    create: (data)       => ipcRenderer.invoke('jobcards:create', data),
+    update: (id, data)   => ipcRenderer.invoke('jobcards:update', { id, data }),
+    delete: (id)         => ipcRenderer.invoke('jobcards:delete', id),
   },
 
-  // Accounts
+  // ── Accounts ──────────────────────────────────────────────────────────────
   accounts: {
-    list: () => ipcRenderer.invoke('accounts:list'),
-    get: (id) => ipcRenderer.invoke('accounts:get', id),
-    create: (data) => ipcRenderer.invoke('accounts:create', data),
-    update: (id, data) => ipcRenderer.invoke('accounts:update', { id, data }),
-    delete: (id) => ipcRenderer.invoke('accounts:delete', id),
+    list:   ()           => ipcRenderer.invoke('accounts:list'),
+    get:    (id)         => ipcRenderer.invoke('accounts:get',    id),
+    create: (data)       => ipcRenderer.invoke('accounts:create', data),
+    update: (id, data)   => ipcRenderer.invoke('accounts:update', { id, data }),
+    delete: (id)         => ipcRenderer.invoke('accounts:delete', id),
   },
 
-  // Field Categories
-  fieldCategories: {
-    list: () => ipcRenderer.invoke('fieldCategories:list'),
-    get: (id) => ipcRenderer.invoke('fieldCategories:get', id),
-    create: (data) => ipcRenderer.invoke('fieldCategories:create', data),
-    update: (id, data) => ipcRenderer.invoke('fieldCategories:update', { id, data }),
-    delete: (id) => ipcRenderer.invoke('fieldCategories:delete', id),
+  // ── Form Fields (settings-defined extra fields) ───────────────────────────
+  formFields: {
+    list:   ()           => ipcRenderer.invoke('formFields:list'),
+    create: (data)       => ipcRenderer.invoke('formFields:create', data),
+    update: (id, data)   => ipcRenderer.invoke('formFields:update', { id, data }),
+    delete: (id)         => ipcRenderer.invoke('formFields:delete', id),
   },
 
-  // Custom Fields
-  customFields: {
-    list: () => ipcRenderer.invoke('customFields:list'),
-    create: (data) => ipcRenderer.invoke('customFields:create', data),
-    update: (id, data) => ipcRenderer.invoke('customFields:update', { id, data }),
-    delete: (id) => ipcRenderer.invoke('customFields:delete', id),
-  },
-
-  // Layouts
-  layouts: {
-    list: () => ipcRenderer.invoke('layouts:list'),
-    get: (id) => ipcRenderer.invoke('layouts:get', id),
-    create: (data) => ipcRenderer.invoke('layouts:create', data),
-    update: (id, data) => ipcRenderer.invoke('layouts:update', { id, data }),
-    delete: (id) => ipcRenderer.invoke('layouts:delete', id),
-  },
-
-  // PDF Operations
+  // ── PDF ───────────────────────────────────────────────────────────────────
   pdf: {
-    generate: (jobCardId, layoutId) => ipcRenderer.invoke('pdf:generate', { jobCardId, layoutId }),
-    import: (filePath) => ipcRenderer.invoke('pdf:import', filePath),
-    export: (jobCardId, layoutId) => ipcRenderer.invoke('pdf:export', { jobCardId, layoutId }),
-    getExportPath: (filename) => ipcRenderer.invoke('pdf:getExportPath', filename),
+    saveToDisk:   (payload)  => ipcRenderer.invoke('pdf:saveToDisk',  payload),
+    getExportDir: ()         => ipcRenderer.invoke('pdf:getExportDir'),
   },
 
-  // File System
+  // ── File System ───────────────────────────────────────────────────────────
   fileSystem: {
-    readFile: (filePath) => ipcRenderer.invoke('fs:readFile', filePath),
-    writeFile: (filePath, data) => ipcRenderer.invoke('fs:writeFile', { filePath, data }),
-    selectFile: (options) => ipcRenderer.invoke('fs:selectFile', options),
-    saveFile: (options) => ipcRenderer.invoke('fs:saveFile', options),
-    selectFolder: (options) => ipcRenderer.invoke('fs:selectFolder', options),
+    readFile:     (filePath) => ipcRenderer.invoke('fs:readFile',   filePath),
+    writeFile:    (fp, data) => ipcRenderer.invoke('fs:writeFile',  { filePath: fp, data }),
+    selectFile:   (options)  => ipcRenderer.invoke('fs:selectFile', options),
+    saveFile:     (options)  => ipcRenderer.invoke('fs:saveFile',   options),
+    selectFolder: (options)  => ipcRenderer.invoke('fs:selectFolder', options),
   },
 
-  // App Settings
+  // ── App Settings ──────────────────────────────────────────────────────────
   settings: {
-    get: (key) => ipcRenderer.invoke('settings:get', key),
-    getAll: () => ipcRenderer.invoke('settings:getAll'),
-    set: (key, value) => ipcRenderer.invoke('settings:set', { key, value }),
-    getExportPath: () => ipcRenderer.invoke('settings:getExportPath'),
+    get:           (key)        => ipcRenderer.invoke('settings:get',        key),
+    getAll:        ()           => ipcRenderer.invoke('settings:getAll'),
+    set:           (key, value) => ipcRenderer.invoke('settings:set',        { key, value }),
+    getExportPath: ()           => ipcRenderer.invoke('settings:getExportPath'),
   },
 
-  // Database Operations
+  // ── Database ──────────────────────────────────────────────────────────────
   database: {
-    getStats: () => ipcRenderer.invoke('database:stats'),
+    getStats:     () => ipcRenderer.invoke('database:stats'),
     clearDeleted: () => ipcRenderer.invoke('database:clearDeleted'),
-    clearAll: () => ipcRenderer.invoke('database:clearAll'),
+    clearAll:     () => ipcRenderer.invoke('database:clearAll'),
   },
 });

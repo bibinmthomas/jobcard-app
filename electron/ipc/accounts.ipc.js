@@ -1,4 +1,5 @@
 const { getPrismaClient } = require('../prisma/client');
+const { getCurrentSession } = require('./auth.ipc');
 
 /**
  * Setup IPC handlers for Account operations
@@ -6,83 +7,91 @@ const { getPrismaClient } = require('../prisma/client');
 function setupAccountsIPC(ipcMain) {
   const prisma = getPrismaClient();
 
-  // List accounts
+  // List all active accounts
   ipcMain.handle('accounts:list', async () => {
     try {
       return await prisma.account.findMany({
         where: { isDeleted: false },
-        orderBy: { name: 'asc' },
+        orderBy: { acctName: 'asc' },
       });
     } catch (error) {
-      console.error('Error listing accounts:', error);
+      console.error('[accounts:list] Error:', error);
       throw error;
     }
   });
 
-  // Get account
+  // Get a single account
   ipcMain.handle('accounts:get', async (event, id) => {
     try {
       const account = await prisma.account.findUnique({ where: { id } });
       if (!account || account.isDeleted) return null;
       return account;
     } catch (error) {
-      console.error('Error getting account:', error);
+      console.error('[accounts:get] Error:', error);
       throw error;
     }
   });
 
   // Create account
   ipcMain.handle('accounts:create', async (event, data) => {
+    if (!getCurrentSession()) throw new Error('Not authenticated');
     try {
+      if (!data.acctName || !data.acctName.trim()) {
+        throw new Error('Account name is required');
+      }
+
       return await prisma.account.create({
         data: {
-          name: data.name,
-          address: data.address,
-          city: data.city,
-          pin: data.pin,
-          telephone: data.telephone,
-          fax: data.fax || null,
-          telex: data.telex || null,
+          acctName:      data.acctName.trim(),
+          address:       data.address       || null,
+          city:          data.city          || null,
+          pin:           data.pin           || null,
+          fax:           data.fax           || null,
+          telex:         data.telex         || null,
           contactPerson: data.contactPerson || null,
         },
       });
     } catch (error) {
-      console.error('Error creating account:', error);
+      console.error('[accounts:create] Error:', error);
       throw error;
     }
   });
 
   // Update account
   ipcMain.handle('accounts:update', async (event, { id, data }) => {
+    if (!getCurrentSession()) throw new Error('Not authenticated');
     try {
+      if (!data.acctName || !data.acctName.trim()) {
+        throw new Error('Account name is required');
+      }
+
       return await prisma.account.update({
         where: { id },
         data: {
-          name: data.name,
-          address: data.address,
-          city: data.city,
-          pin: data.pin,
-          telephone: data.telephone,
-          fax: data.fax || null,
-          telex: data.telex || null,
+          acctName:      data.acctName.trim(),
+          address:       data.address       || null,
+          city:          data.city          || null,
+          pin:           data.pin           || null,
+          fax:           data.fax           || null,
+          telex:         data.telex         || null,
           contactPerson: data.contactPerson || null,
         },
       });
     } catch (error) {
-      console.error('Error updating account:', error);
+      console.error('[accounts:update] Error:', error);
       throw error;
     }
   });
 
-  // Soft delete account (only if no active job cards)
+  // Soft-delete account — blocked if it has active job cards
   ipcMain.handle('accounts:delete', async (event, id) => {
+    if (!getCurrentSession()) throw new Error('Not authenticated');
     try {
       const jobCardCount = await prisma.jobCard.count({
         where: { accountId: id, isDeleted: false },
       });
-
       if (jobCardCount > 0) {
-        throw new Error('Cannot delete account with active job cards');
+        throw new Error('Cannot delete an account that has active job cards');
       }
 
       await prisma.account.update({
@@ -92,7 +101,7 @@ function setupAccountsIPC(ipcMain) {
 
       return { success: true };
     } catch (error) {
-      console.error('Error deleting account:', error);
+      console.error('[accounts:delete] Error:', error);
       throw error;
     }
   });

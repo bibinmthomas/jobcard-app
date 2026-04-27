@@ -1,357 +1,295 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect } from 'react';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { useLayouts } from '../hooks/useLayouts';
 import { useAccounts } from '../hooks/useAccounts';
-import { AlertCircle } from 'lucide-react';
+import { useFormFields } from '../hooks/useFormFields';
+import { X } from 'lucide-react';
 
-export default function JobCardForm({ jobCard, onSubmit, onCancel }) {
-  const { layouts, isLoading: layoutsLoading } = useLayouts();
-  const { accounts, isLoading: accountsLoading } = useAccounts();
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    customData: {},
-    accountId: null,
-    layoutId: null,
-  });
-  const [selectedLayout, setSelectedLayout] = useState(null);
-  const [selectedAccount, setSelectedAccount] = useState(null);
-  const [accountSearch, setAccountSearch] = useState('');
+const today = () => new Date().toISOString().split('T')[0];
 
-  useEffect(() => {
-    if (!jobCard) return;
+const EMPTY = {
+  accountId:        '',
+  date:             today(),
+  customer:         '',
+  contNo:           '',
+  lcCNo:            '',
+  ogcNo:            '',
+  partName:         '',
+  poNo:             '',
+  billNo:           '',
+  dwgNo:            '',
+  qty:              '',
+  settingStartTime: '',
+  settingEndTime:   '',
+  settingTotalTime: '',
+  jobStartTime:     '',
+  jobEndTime:       '',
+  jobTotalTime:     '',
+  mcHrsStart:       '',
+  mcHrsEnd:         '',
+  mcTotalTime:      '',
+  pl:               '',
+  thickness:        '',
+  taper:            '',
+  operator:         '',
+  remark:           '',
+  progNo:           '',
+  amount:           '0.00',
+  extraFields:      {},
+};
 
-    const nextState = {
-      title: jobCard.title || '',
-      description: jobCard.description || '',
-      customData: jobCard.customData || {},
-      accountId: jobCard.accountId || null,
-      layoutId: jobCard.layoutId || null,
+function TextInput({ label, value, onChange, type = 'text', readOnly, required }) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      <input
+        type={type}
+        value={value}
+        onChange={onChange}
+        readOnly={readOnly}
+        required={required}
+        className={`w-full px-2.5 py-1.5 text-sm border rounded focus:outline-none focus:ring-1 focus:ring-blue-500
+          ${readOnly
+            ? 'bg-gray-100 dark:bg-gray-600 border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400'
+            : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100'
+          }`}
+      />
+    </div>
+  );
+}
+
+function SectionHeader({ title }) {
+  return (
+    <div className="col-span-4 mt-3 mb-1">
+      <h3 className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider border-b border-blue-100 dark:border-blue-900 pb-1">
+        {title}
+      </h3>
+    </div>
+  );
+}
+
+export default function JobCardForm({ initial, onSave, onCancel, saving }) {
+  const { accounts } = useAccounts();
+  const { formFields } = useFormFields();
+
+  const [form, setForm] = useState(() => {
+    if (!initial) return EMPTY;
+    return {
+      ...EMPTY,
+      ...initial,
+      accountId: initial.accountId ? String(initial.accountId) : '',
+      date:      initial.date
+        ? new Date(initial.date).toISOString().split('T')[0]
+        : today(),
+      extraFields: initial.extraFields || {},
     };
+  });
 
-    setFormData((prev) => (
-      JSON.stringify(prev) === JSON.stringify(nextState) ? prev : nextState
-    ));
+  const [error, setError] = useState('');
 
-    if (jobCard.layoutId && layouts.length > 0) {
-      const layout = layouts.find(l => l.id === jobCard.layoutId) || null;
-      setSelectedLayout(layout);
-    }
+  const set = (field) => (e) =>
+    setForm(prev => ({ ...prev, [field]: e.target.value }));
 
-    if (jobCard.accountId && accounts.length > 0) {
-      const account = accounts.find(a => a.id === jobCard.accountId) || null;
-      setSelectedAccount(account);
-    }
-  }, [jobCard, layouts, accounts]);
-
-  const handleLayoutChange = (layoutId) => {
-    const layout = layouts.find(l => l.id === parseInt(layoutId));
-    setSelectedLayout(layout);
-    setFormData(prev => ({
+  const setExtra = (name) => (e) =>
+    setForm(prev => ({
       ...prev,
-      layoutId: layout ? layout.id : null,
-      customData: {}, // Reset custom data when layout changes
+      extraFields: { ...prev.extraFields, [name]: e.target.value },
     }));
+
+  const toggleMulti = (name, option) => {
+    setForm(prev => {
+      const current = prev.extraFields[name] || [];
+      const next = current.includes(option)
+        ? current.filter(v => v !== option)
+        : [...current, option];
+      return { ...prev, extraFields: { ...prev.extraFields, [name]: next } };
+    });
   };
 
-  const handleAccountChange = (accountId) => {
-    const account = accounts.find(a => a.id === parseInt(accountId));
-    setSelectedAccount(account || null);
-    setFormData(prev => ({
-      ...prev,
-      accountId: account ? account.id : null,
-    }));
-  };
+  // Auto-fill customer name from selected account
+  useEffect(() => {
+    if (form.accountId) {
+      const acc = accounts.find(a => String(a.id) === String(form.accountId));
+      if (acc && !initial) {
+        setForm(prev => ({ ...prev, customer: acc.acctName }));
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.accountId, accounts]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit(formData);
-  };
-
-  const handleCustomFieldChange = (fieldName, value) => {
-    setFormData(prev => ({
-      ...prev,
-      customData: {
-        ...prev.customData,
-        [fieldName]: value,
-      },
-    }));
-  };
-
-  // Get all custom fields from selected layout's categories
-  const getLayoutFields = () => {
-    if (!selectedLayout || !selectedLayout.categories) return [];
-
-    const fields = [];
-    selectedLayout.categories.forEach(layoutCategory => {
-      if (layoutCategory.category && layoutCategory.category.customFields) {
-        fields.push(...layoutCategory.category.customFields);
-      }
+    setError('');
+    if (!form.accountId) { setError('Please select an account'); return; }
+    onSave({
+      ...form,
+      accountId: parseInt(form.accountId, 10),
+      qty: form.qty !== '' ? parseInt(form.qty, 10) : null,
     });
-
-    // Sort by order
-    return fields.sort((a, b) => a.order - b.order);
   };
-
-  const customFields = getLayoutFields();
-
-  const filteredAccounts = accounts.filter((account) => {
-    const term = accountSearch.trim().toLowerCase();
-    if (!term) return true;
-    return (
-      account.name.toLowerCase().includes(term) ||
-      account.city.toLowerCase().includes(term) ||
-      account.address.toLowerCase().includes(term)
-    );
-  });
-
-  const renderCustomField = (field) => {
-    const value = formData.customData[field.name] || '';
-
-    switch (field.type) {
-      case 'text':
-      case 'number':
-      case 'date':
-        return (
-          <Input
-            type={field.type}
-            value={value}
-            onChange={(e) => handleCustomFieldChange(field.name, e.target.value)}
-            required={field.required}
-          />
-        );
-      case 'select':
-        {
-          const options = field.options || [];
-          return (
-            <select
-              className="flex h-10 w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-              value={value}
-              onChange={(e) => handleCustomFieldChange(field.name, e.target.value)}
-              required={field.required}
-            >
-              <option value="">Select...</option>
-              {options.map((opt, idx) => (
-                <option key={idx} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
-          );
-        }
-      default:
-        return (
-          <Input
-            type="text"
-            value={value}
-            onChange={(e) => handleCustomFieldChange(field.name, e.target.value)}
-            required={field.required}
-          />
-        );
-    }
-  };
-
-  if (layoutsLoading || accountsLoading) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <p className="text-center text-gray-600 dark:text-gray-400">Loading layouts and accounts...</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (!jobCard && accounts.length === 0) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Cannot Create Job Card</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-start gap-3 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md">
-            <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-500 mt-0.5" />
-            <div>
-              <p className="font-medium text-yellow-900 dark:text-yellow-200">No Accounts Available</p>
-              <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-                You must create at least one account before creating job cards.
-                Please go to the Accounts section in Admin to add an account first.
-              </p>
-            </div>
-          </div>
-          {onCancel && (
-            <div className="mt-4">
-              <Button type="button" variant="outline" onClick={onCancel}>
-                Go Back
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // Block creation if no layouts exist
-  if (!jobCard && layouts.length === 0) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Cannot Create Job Card</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-start gap-3 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md">
-            <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-500 mt-0.5" />
-            <div>
-              <p className="font-medium text-yellow-900 dark:text-yellow-200">No Layouts Available</p>
-              <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-                You must create at least one layout before creating job cards.
-                Please go to the Layouts page to create a layout first.
-              </p>
-            </div>
-          </div>
-          {onCancel && (
-            <div className="mt-4">
-              <Button type="button" variant="outline" onClick={onCancel}>
-                Go Back
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    );
-  }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{jobCard ? 'Edit Job Card' : 'Create Job Card'}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Account Selection */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Select Account *
-            </label>
-            <div className="space-y-2">
-              <Input
-                type="text"
-                value={accountSearch}
-                onChange={(e) => setAccountSearch(e.target.value)}
-                placeholder="Search by name, city, or address"
-              />
-              <select
-                className="flex h-10 w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-                value={formData.accountId || ''}
-                onChange={(e) => handleAccountChange(e.target.value)}
-                required
-              >
-                <option value="">Select an account...</option>
-                {filteredAccounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.name} - {account.city}
-                  </option>
-                ))}
-              </select>
-              {selectedAccount && (
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {selectedAccount.address}, {selectedAccount.city} | Tel: {selectedAccount.telephone}
-                </p>
-              )}
-            </div>
-          </div>
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <h2 className="font-semibold text-gray-900 dark:text-gray-100">
+          {initial ? `Edit Job Card — ${initial.jobNo}` : 'New Job Card'}
+        </h2>
+        <button onClick={onCancel} className="text-gray-400 hover:text-gray-600">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
 
-          {/* Layout Selection - Required for new job cards */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Select Layout * {!jobCard && <span className="text-xs text-gray-500 dark:text-gray-400">(Choose first)</span>}
+      <form onSubmit={handleSubmit} className="p-6">
+        <div className="grid grid-cols-4 gap-x-4 gap-y-3">
+
+          <SectionHeader title="Account & Identification" />
+
+          {/* Account selector */}
+          <div className="col-span-2">
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">
+              Account <span className="text-red-500">*</span>
             </label>
             <select
-              className="flex h-10 w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-              value={formData.layoutId || ''}
-              onChange={(e) => handleLayoutChange(e.target.value)}
+              value={form.accountId}
+              onChange={set('accountId')}
               required
+              className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
-              <option value="">Select a layout...</option>
-              {layouts.map((layout) => (
-                <option key={layout.id} value={layout.id}>
-                  {layout.name}
-                  {layout.categories && layout.categories.length > 0 &&
-                    ` (${layout.categories.length} ${layout.categories.length === 1 ? 'category' : 'categories'})`
-                  }
-                </option>
+              <option value="">— Select account —</option>
+              {accounts.map(a => (
+                <option key={a.id} value={a.id}>{a.acctName}{a.city ? ` (${a.city})` : ''}</option>
               ))}
             </select>
-            {selectedLayout && selectedLayout.categories && selectedLayout.categories.length > 0 && (
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                This layout uses fields from: {selectedLayout.categories.map(lc => lc.category.name).join(', ')}
-              </p>
-            )}
           </div>
 
-          {/* Only show rest of form if layout is selected */}
-          {selectedLayout && (
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Job No</label>
+            <input
+              value={initial?.jobNo || '(auto-generated)'}
+              readOnly
+              className="w-full px-2.5 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded bg-gray-100 dark:bg-gray-600 text-gray-500 dark:text-gray-400"
+            />
+          </div>
+
+          <TextInput label="Date" value={form.date} onChange={set('date')} type="date" />
+
+          <TextInput label="Customer"  value={form.customer} onChange={set('customer')} />
+          <TextInput label="Cont No"   value={form.contNo}   onChange={set('contNo')} />
+          <TextInput label="L.C.C No"  value={form.lcCNo}    onChange={set('lcCNo')} />
+          <TextInput label="O.G.C No"  value={form.ogcNo}    onChange={set('ogcNo')} />
+          <TextInput label="Part Name" value={form.partName} onChange={set('partName')} />
+          <TextInput label="P.O. No"   value={form.poNo}     onChange={set('poNo')} />
+          <TextInput label="Bill No"   value={form.billNo}   onChange={set('billNo')} />
+          <TextInput label="DWG No"    value={form.dwgNo}    onChange={set('dwgNo')} />
+          <TextInput label="QTY"       value={form.qty}      onChange={set('qty')} type="number" />
+
+          <SectionHeader title="Setting" />
+          <TextInput label="Start Time"  value={form.settingStartTime} onChange={set('settingStartTime')} />
+          <TextInput label="End Time"    value={form.settingEndTime}   onChange={set('settingEndTime')} />
+          <TextInput label="Total Time"  value={form.settingTotalTime} onChange={set('settingTotalTime')} />
+          <div />
+
+          <SectionHeader title="Job" />
+          <TextInput label="Job Start Time" value={form.jobStartTime} onChange={set('jobStartTime')} />
+          <TextInput label="Job End Time"   value={form.jobEndTime}   onChange={set('jobEndTime')} />
+          <TextInput label="Total Time"     value={form.jobTotalTime} onChange={set('jobTotalTime')} />
+          <div />
+
+          <SectionHeader title="M/C Hours" />
+          <TextInput label="M/C Hrs Start" value={form.mcHrsStart}  onChange={set('mcHrsStart')} />
+          <TextInput label="M/C Hrs End"   value={form.mcHrsEnd}    onChange={set('mcHrsEnd')} />
+          <TextInput label="Total Time"    value={form.mcTotalTime} onChange={set('mcTotalTime')} />
+          <div />
+
+          <SectionHeader title="Specifications" />
+          <TextInput label="PL"        value={form.pl}        onChange={set('pl')} />
+          <TextInput label="Thickness" value={form.thickness} onChange={set('thickness')} />
+          <TextInput label="Taper"     value={form.taper}     onChange={set('taper')} />
+          <div />
+
+          <SectionHeader title="Assignment" />
+          <TextInput label="Operator" value={form.operator} onChange={set('operator')} />
+          <TextInput label="Prog No"  value={form.progNo}   onChange={set('progNo')} />
+          <TextInput label="Amount"   value={form.amount}   onChange={set('amount')} />
+          <div />
+
+          <div className="col-span-4">
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Remark</label>
+            <textarea
+              value={form.remark}
+              onChange={set('remark')}
+              rows={2}
+              className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Extra settings-defined fields */}
+          {formFields.length > 0 && (
             <>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title *</label>
-                <Input
-                  type="text"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  required
-                  placeholder="Enter job card title"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
-                <textarea
-                  className="flex min-h-[100px] w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Enter description"
-                />
-              </div>
-
-              {customFields.length > 0 && (
-                <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Custom Fields</h3>
-                  <div className="space-y-4">
-                    {customFields.map((field) => (
-                      <div key={field.id}>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          {field.name}
-                          {field.required && ' *'}
-                        </label>
-                        {renderCustomField(field)}
+              <SectionHeader title="Additional Fields" />
+              {formFields.map(field => {
+                if (field.type === 'multiselect') {
+                  const opts = field.options ? JSON.parse(field.options) : [];
+                  const selected = form.extraFields[field.name] || [];
+                  return (
+                    <div key={field.id} className="col-span-2">
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                        {field.label}{field.required && <span className="text-red-500 ml-0.5">*</span>}
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {opts.map(opt => (
+                          <label key={opt} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={selected.includes(opt)}
+                              onChange={() => toggleMulti(field.name, opt)}
+                              className="rounded border-gray-300"
+                            />
+                            <span className="text-gray-700 dark:text-gray-300">{opt}</span>
+                          </label>
+                        ))}
                       </div>
-                    ))}
+                    </div>
+                  );
+                }
+                return (
+                  <div key={field.id}>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">
+                      {field.label}{field.required && <span className="text-red-500 ml-0.5">*</span>}
+                    </label>
+                    <input
+                      type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
+                      value={form.extraFields[field.name] || ''}
+                      onChange={setExtra(field.name)}
+                      required={field.required}
+                      className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
                   </div>
-                </div>
-              )}
-
-              <div className="flex gap-2 pt-4">
-                <Button type="submit">
-                  {jobCard ? 'Update' : 'Create'}
-                </Button>
-                {onCancel && (
-                  <Button type="button" variant="outline" onClick={onCancel}>
-                    Cancel
-                  </Button>
-                )}
-              </div>
+                );
+              })}
             </>
           )}
+        </div>
 
-          {!selectedLayout && (
-            <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-              Please select a layout to continue
-            </p>
-          )}
-        </form>
-      </CardContent>
-    </Card>
+        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+
+        <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-5 py-2 text-sm text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="px-5 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-lg"
+          >
+            {saving ? 'Saving…' : initial ? 'Update' : 'Create Job Card'}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
