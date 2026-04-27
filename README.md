@@ -1,277 +1,224 @@
-# Job Card Application
+# Job Card Manager
 
-A powerful desktop application for creating, managing, and generating professional job cards with customizable layouts, field categories, and PDF export capabilities.
+A desktop application for creating, managing, and exporting professional job cards. Built with Electron, React, and Prisma on SQLite.
 
 ## Overview
 
-The Job Card Application is an Electron-based desktop solution that enables users to create structured job cards with dynamic custom fields, multi-layout support, and advanced PDF generation. Built with a modern tech stack, it provides a seamless user experience with features like theme customization, soft delete functionality, and database management.
+Job Card Manager is a Windows desktop app designed for workshops and manufacturing operations. It supports multi-user access with role-based authentication, structured job card entry, account management, PDF export, and reporting — all stored locally with no internet connection required.
 
 ## Tech Stack
 
 ### Frontend
-- **React 18** - UI framework
-- **Tailwind CSS** - Utility-first styling
-- **React Query (TanStack Query)** - Server state management
-- **React Hook Form** - Form handling and validation
-- **React Router DOM** - Client-side routing
+- **React 19** — UI framework
+- **Tailwind CSS** — Utility-first styling
+- **TanStack Query v5** — Server state management
+- **React Router DOM v7** — Client-side routing
+- **@react-pdf/renderer** — PDF generation and preview
+- **Lucide React** — Icon library
 
-### Backend
-- **Electron** - Desktop application framework
-- **Node.js** - Runtime environment
-- **Prisma ORM** - Database management and migrations
-- **SQLite** - Embedded database
-- **PDFKit** - PDF generation engine
+### Backend (Main Process)
+- **Electron 39** — Desktop application shell
+- **Prisma 6 + SQLite** — ORM and embedded database
+- **bcryptjs** — Password hashing
 
-### Development Tools
-- **Vite** - Build tool and dev server
-- **ESLint** - Code linting
-- **PostCSS** - CSS processing
+### Build / Dev
+- **Vite 7** — Renderer build tool and dev server
+- **Electron Forge 7** — Packaging and installer generation
+- **concurrently / cross-env** — Dev tooling
+
+---
 
 ## Architecture
 
-### Application Structure
+### Directory Structure
 
 ```
 jobcard-app/
-├── electron/                 # Backend (Main Process)
-│   ├── ipc/                 # IPC handlers for communication
+├── electron/                  # Main process (Node.js / Electron)
+│   ├── ipc/                   # IPC handlers
+│   │   ├── auth.ipc.js
 │   │   ├── jobcards.ipc.js
-│   │   ├── customFields.ipc.js
-│   │   ├── fieldCategories.ipc.js
-│   │   ├── layouts.ipc.js
-│   │   ├── appSettings.ipc.js
-│   │   ├── database.ipc.js
+│   │   ├── accounts.ipc.js
+│   │   ├── formFields.ipc.js
 │   │   ├── pdf.ipc.js
-│   │   └── fileSystem.ipc.js
-│   ├── prisma/              # Database schema and migrations
+│   │   ├── fileSystem.ipc.js
+│   │   ├── appSettings.ipc.js
+│   │   └── database.ipc.js
+│   ├── prisma/                # Schema, migrations, generated client
 │   │   ├── schema.prisma
-│   │   └── migrations/
-│   ├── main.js              # Electron main process
-│   └── preload.js           # Secure bridge to renderer
+│   │   ├── migrations/
+│   │   └── generated/client/
+│   ├── utils/
+│   │   └── paths.js           # userData path resolution
+│   ├── main.js                # Entry point, window creation
+│   └── preload.js             # contextBridge API surface
 │
-└── renderer/                # Frontend (Renderer Process)
-    ├── src/
-    │   ├── components/      # React components
-    │   ├── contexts/        # React context providers
-    │   ├── hooks/           # Custom React hooks
-    │   ├── pages/           # Page components
-    │   └── utils/           # Utility functions and API layer
-    └── public/              # Static assets
+└── renderer/                  # Renderer process (React)
+    └── src/
+        ├── pages/             # Dashboard, JobCards, Accounts, Reports, Admin, Login, Signup
+        ├── components/        # JobCardForm, JobCardList, PDFPreviewModal, AdminSettings, …
+        ├── contexts/          # AuthContext, ThemeContext
+        └── utils/             # api.js (IPC wrapper)
 ```
 
-### Communication Flow
+### IPC Communication Flow
 
-The application uses Electron's IPC (Inter-Process Communication) pattern:
+```
+React UI → preload (contextBridge) → ipcMain handler → Prisma → SQLite
+                                                               ↓
+React UI ←─────────────────────────────────────── response
+```
 
-1. **Renderer Process** (React UI) → Preload Script (contextBridge)
-2. **Preload Script** → Main Process (IPC handlers)
-3. **Main Process** → Prisma ORM → SQLite Database
-4. Response flows back through the same chain
+The renderer has no direct Node.js access. All data operations go through named IPC channels exposed via `preload.js`.
 
-This architecture ensures security by isolating the renderer process from Node.js APIs while maintaining efficient communication.
+---
+
+## Features
+
+### Authentication
+- Login / Signup with bcrypt-hashed passwords
+- First-launch flow: auto-redirects to Signup when no users exist
+- Role-based access: `admin` and `user` roles
+- Session persists across window sessions (stored in memory, cleared on logout)
+
+### Job Cards
+- Create, edit, soft-delete job cards
+- Auto-generated job number (`PREFIX/NNNN`)
+- Core fields: customer, contract/LC/OGC/PO/bill/drawing numbers, part name, qty
+- Time tracking: setting time, job time, machine hours (start/end/total)
+- Specifications: PL, thickness, taper
+- Assignment: operator, remark, program number, amount
+- Extra fields: admin-configurable dynamic fields stored as JSON per card
+- Link each job card to an account
+
+### Accounts
+- Create and manage customer/client accounts
+- Fields: name, address, city, PIN, fax, telex, contact person
+- Soft delete; unique constraint on (name, city)
+- Account selector on the job card form
+
+### PDF Export
+- Live PDF preview via `@react-pdf/renderer`
+- Export to configurable path (default: `userData/pdf-exports/`)
+- PDF template: `JobCardPDFTemplate`
+- Report PDF: `ReportPDFTemplate`
+
+### Reports
+- Dedicated reports page with PDF export
+
+### Admin Panel
+- **Form Fields** — define extra fields (string / number / date / multiselect) that appear on every job card
+- **Settings** — configure PDF export path, theme preference
+- **Database** — view record counts, empty soft-deleted records, full database reset
+
+### Theme
+- Light, Dark, System (auto-sync with OS)
+- Persisted via `AppSettings` table
+- Real-time switching, no reload required
+
+---
 
 ## Database Schema
- - To open prisma studio - npx prisma studio --schema "electron/prisma/schema.prisma"
-### Core Models
 
-- **JobCard** - Main job card entities with title, description, and layout association
-- **Layout** - Customizable layout templates with JSON configuration
-- **FieldCategory** - Organizational categories for custom fields
-- **CustomField** - Dynamic field definitions (text, number, date, select)
-- **LayoutCategory** - Junction table for layout-category relationships
-- **AppSettings** - Application configuration (export path, theme preferences)
+Open Prisma Studio:
+```bash
+npx prisma studio --schema "electron/prisma/schema.prisma"
+```
 
-### Key Features
-- Soft delete functionality across all models (`isDeleted` flag)
-- Relational integrity with foreign key constraints
-- Flexible JSON configuration for layout elements
-- Order management for categories and fields
+### Models
 
-## Completed Features
+| Model | Purpose |
+|---|---|
+| `User` | Auth — username, bcrypt password, role (admin/user) |
+| `Account` | Customer/client master data |
+| `JobCard` | Core job card with all fields + `extraFields` JSON |
+| `FormField` | Admin-defined extra fields (type, label, options) |
+| `AppSettings` | Key/value store for app config (theme, export path) |
 
-### ✅ Phase 1: Field Categories + Layout Selection (Partial)
+All models use soft delete (`isDeleted` flag). Hard deletes only happen via "Empty Recycle Bin" in Admin → Database.
 
-**Backend Infrastructure (60% Complete)**
-- Field category management IPC handlers
-- App settings IPC handlers
-- Custom fields with category relationships
-- Soft delete implementation for custom fields
-- Frontend hooks for categories and settings
-
-**Status:** Backend core complete, UI components pending
-
-### ✅ Phase 2: Soft Delete + Export Path Configuration (100% Complete)
-
-**Soft Delete System**
-- Non-destructive deletion across all entities
-- Filtered queries exclude deleted records
-- Data recovery capabilities through database management
-
-**Export Configuration**
-- Custom export path selection with native folder dialog
-- Path validation and persistence
-- Default fallback to user documents
-- Manual path input support
-
-### ✅ Phase 3: Theme Support (100% Complete)
-
-**Theme System**
-- Three theme modes: Light, Dark, System
-- Automatic system theme detection
-- Persistent theme preferences
-- Real-time theme switching (no reload required)
-- Dark mode optimized UI components
-
-**Implementation**
-- Tailwind CSS dark mode with class strategy
-- React Context for theme state management
-- System preference synchronization
-- Theme settings UI with visual indicators
-
-### ✅ Phase 3.5: Database Management UI (100% Complete)
-
-**Database Statistics Dashboard**
-- Real-time database statistics
-- Entity counts by type (JobCards, Layouts, Categories, Fields)
-- Active vs deleted record breakdown
-- Estimated database size
-- Auto-refresh every 5 seconds
-
-**Storage Management**
-- "Empty Recycle Bin" - Permanently remove soft-deleted records
-- Recoverable space calculation
-- Confirmation dialogs for safety
-
-**Danger Zone**
-- Complete database reset functionality
-- Double confirmation requirement
-- Preserves app settings (export path, theme)
-- Clear warning messages
-
-### Core Functionality
-
-**Job Card Management**
-- Create, read, update, delete job cards
-- Associate job cards with layouts
-- Dynamic custom field rendering
-- Search and filter capabilities
-
-**Layout Builder**
-- Visual layout designer
-- Drag-and-drop element positioning
-- Text elements with placeholder support
-- Field category associations
-- Layout preview functionality
-
-**PDF Generation**
-- Professional PDF export
-- Custom export path support
-- Layout-based rendering
-- Job card data population
-
-**Custom Fields**
-- Multiple field types (text, number, date, select)
-- Required field validation
-- Custom ordering
-- Category organization
-
-## Planned Features
-
-### ⏳ Phase 1 Completion
-- Field category management UI
-- Layout selection workflow in job card form
-- Category-specific field management
-- Enhanced layout builder with category picker
-
-### ⏳ Phase 4: Enhanced Layout Builder
-- Rich text editor (TipTap integration)
-- Table creation and editing
-- Image upload with crop functionality
-- Multi-page layout support
-- Advanced preview mode
-- Enhanced PDF generation with rich formatting
+---
 
 ## Getting Started
 
 ### Prerequisites
-- Node.js 18+ and npm
-- Git
+- Node.js 18+ and npm 9+
+- Python 3.x and Visual Studio Build Tools (required for native module compilation)
 
-### Installation
+### Install
 
 ```bash
-# Clone the repository
-git clone <repository-url>
 cd jobcard-app
 
-# Install dependencies
+# Install main process dependencies
 npm install
 
 # Install renderer dependencies
-cd renderer
-npm install
-cd ..
+npm install --prefix renderer
 
-# Set up database
-npx prisma generate
-npx prisma migrate dev
+# Generate Prisma client
+npx prisma generate --schema=electron/prisma/schema.prisma
+
+# Run initial migration (creates the SQLite database)
+npx prisma migrate dev --schema=electron/prisma/schema.prisma
 ```
 
 ### Development
 
 ```bash
-# Start the application in development mode
 npm run dev
 ```
 
-### Build
+Starts both the Vite dev server (renderer) and Electron via `concurrently`.
+
+### Build (Windows installer)
 
 ```bash
-# Build for production
+# Build renderer then package with Electron Forge
 npm run build
-
-# Build for specific platform
-npm run build:win   # Windows
-npm run build:mac   # macOS
-npm run build:linux # Linux
 ```
 
-## Configuration
+Output: `out/make/squirrel.windows/x64/JobCardManager-Setup.exe`
 
-### Export Path
-Configure the default PDF export location in **Admin → Settings → Export Path**
-
-### Theme
-Choose your preferred theme in **Admin → Settings → Theme**
-- Light mode
-- Dark mode
-- System (auto-sync with OS)
-
-### Database
-Manage database operations in **Admin → Database**
-- View statistics
-- Empty recycle bin
-- Reset database (caution!)
-
-## Project Status
-
-**Current Version:** 1.0.0-beta  
-**Status:** Active Development
-
-**Completion:**
-- Database Schema: 100%
-- Backend Infrastructure: 85%
-- Core Features: 75%
-- UI/UX: 60%
-
-## Contributing
-
-This is a private project. For questions or suggestions, please contact the development team.
-
-## License
-
-Proprietary - All rights reserved
+See `jobard-docs/packaging-and-distribution.md` for the full build guide, including required pre-build steps for Prisma native binaries.
 
 ---
 
-**Built with ❤️ using Electron, React, and Prisma**
+## Configuration
+
+| Setting | Where |
+|---|---|
+| PDF export path | Admin → Settings |
+| Theme (light/dark/system) | Admin → Settings |
+| Extra job card fields | Admin → Form Fields |
+| Database maintenance | Admin → Database |
+
+---
+
+## Project Status
+
+**Version:** 1.0.0  
+**Status:** Feature-complete, pre-distribution
+
+### What's done
+- Multi-user authentication with roles
+- Full job card CRUD with all domain fields
+- Account management
+- PDF preview and export
+- Reports with PDF export
+- Admin-configurable extra fields
+- Theme system (light/dark/system)
+- Database management (stats, recycle bin, reset)
+- Electron packaging with Electron Forge
+
+### Pending (before first distribution)
+- Production `DATABASE_URL` fix in `main.js` (see packaging doc)
+- `binaryTargets` added to `schema.prisma` for packaged Prisma engine
+- `forge.config.js` metadata filled in (app name, icon, installer name)
+- App icon assets created (`assets/icon.ico`)
+
+---
+
+## License
+
+Proprietary — All rights reserved
