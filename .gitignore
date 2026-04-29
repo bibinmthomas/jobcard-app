@@ -5,10 +5,11 @@ renderer/node_modules/
 # Build outputs
 dist/
 renderer/dist/
-out/
+
+# Tauri build outputs
+src-tauri/target/
 
 # Database
-electron/database/
 *.db
 *.db-journal
 
@@ -16,10 +17,6 @@ electron/database/
 pdf-exports/
 pdf-imports/
 layouts/
-
-# Prisma
-electron/prisma/migrations/
-electron/prisma/generated/
 
 # Environment
 .env

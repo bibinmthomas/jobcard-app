@@ -1,71 +1,108 @@
 /**
- * API layer — thin wrapper over window.api (exposed by preload.js via contextBridge).
- * All renderer code should import from here rather than calling window.api directly.
+ * API layer — Tauri IPC bridge.
+ * All renderer code imports from here. File dialogs use @tauri-apps/plugin-dialog
+ * directly; everything else goes through invoke() to the Rust backend.
  */
+
+import { invoke } from '@tauri-apps/api/core';
+import { open, save } from '@tauri-apps/plugin-dialog';
 
 export const api = {
   // ── Auth ────────────────────────────────────────────────────────────────────
   auth: {
-    hasUsers:   ()       => window.api.auth.hasUsers(),
-    register:   (data)   => window.api.auth.register(data),
-    login:      (data)   => window.api.auth.login(data),
-    logout:     ()       => window.api.auth.logout(),
-    getSession: ()       => window.api.auth.getSession(),
+    hasUsers:   ()       => invoke('auth_has_users'),
+    register:   (data)   => invoke('auth_register', data),
+    login:      (data)   => invoke('auth_login', data),
+    logout:     ()       => invoke('auth_logout'),
+    getSession: ()       => invoke('auth_get_session'),
   },
 
   // ── Job Cards ────────────────────────────────────────────────────────────────
   jobcards: {
-    list:   ()           => window.api.jobcards.list(),
-    get:    (id)         => window.api.jobcards.get(id),
-    create: (data)       => window.api.jobcards.create(data),
-    update: (id, data)   => window.api.jobcards.update(id, data),
-    delete: (id)         => window.api.jobcards.delete(id),
+    list:   ()           => invoke('jobcards_list'),
+    get:    (id)         => invoke('jobcards_get', { id }),
+    create: (data)       => invoke('jobcards_create', { data }),
+    update: (id, data)   => invoke('jobcards_update', { id, data }),
+    delete: (id)         => invoke('jobcards_delete', { id }),
   },
 
   // ── Accounts ─────────────────────────────────────────────────────────────────
   accounts: {
-    list:   ()           => window.api.accounts.list(),
-    get:    (id)         => window.api.accounts.get(id),
-    create: (data)       => window.api.accounts.create(data),
-    update: (id, data)   => window.api.accounts.update(id, data),
-    delete: (id)         => window.api.accounts.delete(id),
+    list:   ()           => invoke('accounts_list'),
+    get:    (id)         => invoke('accounts_get', { id }),
+    create: (data)       => invoke('accounts_create', { data }),
+    update: (id, data)   => invoke('accounts_update', { id, data }),
+    delete: (id)         => invoke('accounts_delete', { id }),
   },
 
   // ── Form Fields ───────────────────────────────────────────────────────────────
   formFields: {
-    list:   ()           => window.api.formFields.list(),
-    create: (data)       => window.api.formFields.create(data),
-    update: (id, data)   => window.api.formFields.update(id, data),
-    delete: (id)         => window.api.formFields.delete(id),
+    list:   ()           => invoke('form_fields_list'),
+    create: (data)       => invoke('form_fields_create', { data }),
+    update: (id, data)   => invoke('form_fields_update', { id, data }),
+    delete: (id)         => invoke('form_fields_delete', { id }),
   },
 
   // ── PDF ───────────────────────────────────────────────────────────────────────
   pdf: {
-    saveToDisk:   (payload) => window.api.pdf.saveToDisk(payload),
-    getExportDir: ()        => window.api.pdf.getExportDir(),
+    saveToDisk: (payload) => {
+      // Uint8Array → plain number array for Tauri JSON serialization
+      const bytes = payload.bytes instanceof Uint8Array
+        ? Array.from(payload.bytes)
+        : (Array.isArray(payload.bytes) ? payload.bytes : Array.from(Object.values(payload.bytes)));
+      return invoke('pdf_save_to_disk', { filename: payload.filename, bytes });
+    },
+    getExportDir: () => invoke('pdf_get_export_dir'),
   },
 
   // ── File System ───────────────────────────────────────────────────────────────
   fileSystem: {
-    readFile:     (fp)      => window.api.fileSystem.readFile(fp),
-    writeFile:    (fp, data)=> window.api.fileSystem.writeFile(fp, data),
-    selectFile:   (opts)    => window.api.fileSystem.selectFile(opts),
-    saveFile:     (opts)    => window.api.fileSystem.saveFile(opts),
-    selectFolder: (opts)    => window.api.fileSystem.selectFolder(opts),
+    readFile:  (fp)       => invoke('fs_read_file',   { filePath: fp }),
+    writeFile: (fp, data) => invoke('fs_write_file',  { filePath: fp, data }),
+
+    selectFile: async (opts = {}) => {
+      const result = await open({
+        multiple: false,
+        filters: opts.filters || [{ name: 'All Files', extensions: ['*'] }],
+      });
+      if (!result) return { canceled: true };
+      const paths = Array.isArray(result) ? result : [result];
+      return { canceled: false, filePaths: paths };
+    },
+
+    saveFile: async (opts = {}) => {
+      const result = await save({
+        defaultPath: opts.defaultPath,
+        filters: opts.filters || [{ name: 'All Files', extensions: ['*'] }],
+      });
+      if (!result) return { canceled: true };
+      return { canceled: false, filePath: result };
+    },
+
+    selectFolder: async (opts = {}) => {
+      const result = await open({
+        directory: true,
+        title: opts.title || 'Select Folder',
+        defaultPath: opts.defaultPath,
+      });
+      if (!result) return { canceled: true };
+      const path = Array.isArray(result) ? result[0] : result;
+      return { canceled: false, folderPath: path };
+    },
   },
 
   // ── Settings ──────────────────────────────────────────────────────────────────
   settings: {
-    get:           (key)        => window.api.settings.get(key),
-    getAll:        ()           => window.api.settings.getAll(),
-    set:           (key, value) => window.api.settings.set(key, value),
-    getExportPath: ()           => window.api.settings.getExportPath(),
+    get:           (key)        => invoke('settings_get',              { key }),
+    getAll:        ()           => invoke('settings_get_all'),
+    set:           (key, value) => invoke('settings_set',              { key, value }),
+    getExportPath: ()           => invoke('settings_get_export_path'),
   },
 
   // ── Database ──────────────────────────────────────────────────────────────────
   database: {
-    getStats:     () => window.api.database.getStats(),
-    clearDeleted: () => window.api.database.clearDeleted(),
-    clearAll:     () => window.api.database.clearAll(),
+    getStats:     () => invoke('db_get_stats'),
+    clearDeleted: () => invoke('db_clear_deleted'),
+    clearAll:     () => invoke('db_clear_all'),
   },
 };

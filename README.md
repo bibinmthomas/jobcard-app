@@ -1,6 +1,6 @@
 # Job Card Manager
 
-A desktop application for creating, managing, and exporting professional job cards. Built with Electron, React, and Prisma on SQLite.
+A desktop application for creating, managing, and exporting professional job cards. Built with Tauri 2, React, and SQLite (rusqlite).
 
 ## Overview
 
@@ -16,15 +16,14 @@ Job Card Manager is a Windows desktop app designed for workshops and manufacturi
 - **@react-pdf/renderer** — PDF generation and preview
 - **Lucide React** — Icon library
 
-### Backend (Main Process)
-- **Electron 39** — Desktop application shell
-- **Prisma 6 + SQLite** — ORM and embedded database
-- **bcryptjs** — Password hashing
+### Backend (Tauri / Rust)
+- **Tauri 2** — Desktop application shell and native bridge
+- **rusqlite** — Embedded SQLite database (via Rust)
+- **bcrypt** — Password hashing (Rust crate)
 
 ### Build / Dev
 - **Vite 7** — Renderer build tool and dev server
-- **Electron Forge 7** — Packaging and installer generation
-- **concurrently / cross-env** — Dev tooling
+- **@tauri-apps/cli** — Tauri CLI for dev and packaging
 
 ---
 
@@ -34,42 +33,34 @@ Job Card Manager is a Windows desktop app designed for workshops and manufacturi
 
 ```
 jobcard-app/
-├── electron/                  # Main process (Node.js / Electron)
-│   ├── ipc/                   # IPC handlers
-│   │   ├── auth.ipc.js
-│   │   ├── jobcards.ipc.js
-│   │   ├── accounts.ipc.js
-│   │   ├── formFields.ipc.js
-│   │   ├── pdf.ipc.js
-│   │   ├── fileSystem.ipc.js
-│   │   ├── appSettings.ipc.js
-│   │   └── database.ipc.js
-│   ├── prisma/                # Schema, migrations, generated client
-│   │   ├── schema.prisma
-│   │   ├── migrations/
-│   │   └── generated/client/
-│   ├── utils/
-│   │   └── paths.js           # userData path resolution
-│   ├── main.js                # Entry point, window creation
-│   └── preload.js             # contextBridge API surface
+├── src-tauri/                 # Tauri / Rust backend
+│   ├── src/
+│   │   ├── main.rs            # Entry point
+│   │   ├── lib.rs             # Command registrations
+│   │   ├── db/                # Database setup and migrations
+│   │   └── commands/          # Tauri commands (auth, jobcards, accounts, …)
+│   ├── Cargo.toml
+│   └── tauri.conf.json
 │
-└── renderer/                  # Renderer process (React)
-    └── src/
-        ├── pages/             # Dashboard, JobCards, Accounts, Reports, Admin, Login, Signup
-        ├── components/        # JobCardForm, JobCardList, PDFPreviewModal, AdminSettings, …
-        ├── contexts/          # AuthContext, ThemeContext
-        └── utils/             # api.js (IPC wrapper)
+├── renderer/                  # React frontend
+│   └── src/
+│       ├── pages/             # Dashboard, JobCards, Accounts, Reports, Admin, Login, Signup
+│       ├── components/        # JobCardForm, JobCardList, PDFPreviewModal, AdminSettings, …
+│       ├── contexts/          # AuthContext, ThemeContext
+│       └── utils/             # api.js (invoke() wrapper)
+│
+└── assets/                    # App icons
 ```
 
-### IPC Communication Flow
+### Communication Flow
 
 ```
-React UI → preload (contextBridge) → ipcMain handler → Prisma → SQLite
-                                                               ↓
-React UI ←─────────────────────────────────────── response
+React UI → invoke() (@tauri-apps/api) → Rust command → rusqlite → SQLite
+                                                                  ↓
+React UI ←──────────────────────────────────────────── response
 ```
 
-The renderer has no direct Node.js access. All data operations go through named IPC channels exposed via `preload.js`.
+The renderer has no direct filesystem or database access. All data operations go through Tauri commands registered in Rust and called via `invoke()`.
 
 ---
 
@@ -79,7 +70,7 @@ The renderer has no direct Node.js access. All data operations go through named 
 - Login / Signup with bcrypt-hashed passwords
 - First-launch flow: auto-redirects to Signup when no users exist
 - Role-based access: `admin` and `user` roles
-- Session persists across window sessions (stored in memory, cleared on logout)
+- Session persists in memory, cleared on logout
 
 ### Job Cards
 - Create, edit, soft-delete job cards
@@ -99,7 +90,7 @@ The renderer has no direct Node.js access. All data operations go through named 
 
 ### PDF Export
 - Live PDF preview via `@react-pdf/renderer`
-- Export to configurable path (default: `userData/pdf-exports/`)
+- Export to configurable path (default: app data directory)
 - PDF template: `JobCardPDFTemplate`
 - Report PDF: `ReportPDFTemplate`
 
@@ -120,22 +111,17 @@ The renderer has no direct Node.js access. All data operations go through named 
 
 ## Database Schema
 
-Open Prisma Studio:
-```bash
-npx prisma studio --schema "electron/prisma/schema.prisma"
-```
+Managed directly via Rust (`rusqlite`) with migration scripts in `src-tauri/src/db/`.
 
-### Models
-
-| Model | Purpose |
+| Table | Purpose |
 |---|---|
-| `User` | Auth — username, bcrypt password, role (admin/user) |
-| `Account` | Customer/client master data |
-| `JobCard` | Core job card with all fields + `extraFields` JSON |
-| `FormField` | Admin-defined extra fields (type, label, options) |
-| `AppSettings` | Key/value store for app config (theme, export path) |
+| `users` | Auth — username, bcrypt password, role (admin/user) |
+| `accounts` | Customer/client master data |
+| `job_cards` | Core job card with all fields + `extra_fields` JSON |
+| `form_fields` | Admin-defined extra fields (type, label, options) |
+| `app_settings` | Key/value store for app config (theme, export path) |
 
-All models use soft delete (`isDeleted` flag). Hard deletes only happen via "Empty Recycle Bin" in Admin → Database.
+All tables use soft delete (`is_deleted` flag). Hard deletes only happen via "Empty Recycle Bin" in Admin → Database.
 
 ---
 
@@ -143,24 +129,19 @@ All models use soft delete (`isDeleted` flag). Hard deletes only happen via "Emp
 
 ### Prerequisites
 - Node.js 18+ and npm 9+
-- Python 3.x and Visual Studio Build Tools (required for native module compilation)
+- Rust toolchain (`rustup`) with `stable` channel
+- Tauri prerequisites: [https://tauri.app/start/prerequisites/](https://tauri.app/start/prerequisites/)
 
 ### Install
 
 ```bash
 cd jobcard-app
 
-# Install main process dependencies
+# Install Tauri CLI
 npm install
 
 # Install renderer dependencies
 npm install --prefix renderer
-
-# Generate Prisma client
-npx prisma generate --schema=electron/prisma/schema.prisma
-
-# Run initial migration (creates the SQLite database)
-npx prisma migrate dev --schema=electron/prisma/schema.prisma
 ```
 
 ### Development
@@ -169,18 +150,15 @@ npx prisma migrate dev --schema=electron/prisma/schema.prisma
 npm run dev
 ```
 
-Starts both the Vite dev server (renderer) and Electron via `concurrently`.
+Starts the Vite dev server (renderer) and the Tauri dev window together.
 
 ### Build (Windows installer)
 
 ```bash
-# Build renderer then package with Electron Forge
 npm run build
 ```
 
-Output: `out/make/squirrel.windows/x64/JobCardManager-Setup.exe`
-
-See `jobard-docs/packaging-and-distribution.md` for the full build guide, including required pre-build steps for Prisma native binaries.
+Output: `src-tauri/target/release/bundle/`
 
 ---
 
@@ -197,7 +175,7 @@ See `jobard-docs/packaging-and-distribution.md` for the full build guide, includ
 
 ## Project Status
 
-**Version:** 1.0.0  
+**Version:** 1.0.1  
 **Status:** Feature-complete, pre-distribution
 
 ### What's done
@@ -209,13 +187,7 @@ See `jobard-docs/packaging-and-distribution.md` for the full build guide, includ
 - Admin-configurable extra fields
 - Theme system (light/dark/system)
 - Database management (stats, recycle bin, reset)
-- Electron packaging with Electron Forge
-
-### Pending (before first distribution)
-- Production `DATABASE_URL` fix in `main.js` (see packaging doc)
-- `binaryTargets` added to `schema.prisma` for packaged Prisma engine
-- `forge.config.js` metadata filled in (app name, icon, installer name)
-- App icon assets created (`assets/icon.ico`)
+- Migrated from Electron to Tauri 2
 
 ---
 
