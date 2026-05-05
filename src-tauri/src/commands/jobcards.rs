@@ -212,25 +212,47 @@ fn generate_job_no(conn: &rusqlite::Connection, acct_name: &str, account_id: i64
 }
 
 #[tauri::command]
-pub fn jobcards_list(db: State<'_, DbState>) -> Result<Vec<JobCard>> {
+pub fn jobcards_list(
+    db: State<'_, DbState>,
+    session: State<'_, SessionState>,
+) -> Result<Vec<JobCard>> {
+    let sess = session
+        .0
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or_else(|| AppError("Not authenticated".to_string()))?;
     let conn = db.0.lock().unwrap();
-    let sql = format!("{} WHERE jc.is_deleted = 0 ORDER BY jc.created_at DESC", SELECT_JOBCARD_SQL);
+    let sql = format!(
+        "{} WHERE jc.is_deleted = 0 AND jc.user_id = ?1 ORDER BY jc.created_at DESC",
+        SELECT_JOBCARD_SQL
+    );
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt
-        .query_map([], map_jobcard_row)?
+        .query_map(rusqlite::params![sess.id], map_jobcard_row)?
         .collect::<rusqlite::Result<Vec<JobCard>>>()?;
     Ok(rows)
 }
 
 #[tauri::command]
-pub fn jobcards_get(db: State<'_, DbState>, id: i64) -> Result<Option<JobCard>> {
+pub fn jobcards_get(
+    db: State<'_, DbState>,
+    session: State<'_, SessionState>,
+    id: i64,
+) -> Result<Option<JobCard>> {
+    let sess = session
+        .0
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or_else(|| AppError("Not authenticated".to_string()))?;
     let conn = db.0.lock().unwrap();
     let sql = format!(
-        "{} WHERE jc.id = ?1 AND jc.is_deleted = 0",
+        "{} WHERE jc.id = ?1 AND jc.is_deleted = 0 AND jc.user_id = ?2",
         SELECT_JOBCARD_SQL
     );
     let result = conn
-        .query_row(&sql, rusqlite::params![id], map_jobcard_row)
+        .query_row(&sql, rusqlite::params![id, sess.id], map_jobcard_row)
         .optional()?;
     Ok(result)
 }
@@ -252,8 +274,8 @@ pub fn jobcards_create(
 
     let (account_id, acct_name): (i64, String) = conn
         .query_row(
-            "SELECT id, acct_name FROM accounts WHERE id = ?1 AND is_deleted = 0",
-            rusqlite::params![data.account_id],
+            "SELECT id, acct_name FROM accounts WHERE id = ?1 AND user_id = ?2 AND is_deleted = 0",
+            rusqlite::params![data.account_id, sess.id],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .optional()?
@@ -305,16 +327,31 @@ pub fn jobcards_update(
     id: i64,
     data: JobCardInput,
 ) -> Result<JobCard> {
-    if session.0.lock().unwrap().is_none() {
-        return Err(AppError("Not authenticated".to_string()));
-    }
+    let sess = session
+        .0
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or_else(|| AppError("Not authenticated".to_string()))?;
 
     let conn = db.0.lock().unwrap();
 
+    let owner: Option<i64> = conn
+        .query_row(
+            "SELECT user_id FROM job_cards WHERE id = ?1 AND is_deleted = 0",
+            rusqlite::params![id],
+            |row| row.get(0),
+        )
+        .optional()?;
+
+    if owner != Some(sess.id) {
+        return Err(AppError("Job card not found or permission denied".to_string()));
+    }
+
     let _: i64 = conn
         .query_row(
-            "SELECT id FROM accounts WHERE id = ?1 AND is_deleted = 0",
-            rusqlite::params![data.account_id],
+            "SELECT id FROM accounts WHERE id = ?1 AND user_id = ?2 AND is_deleted = 0",
+            rusqlite::params![data.account_id, sess.id],
             |row| row.get(0),
         )
         .optional()?
@@ -336,7 +373,7 @@ pub fn jobcards_update(
             pl=?20, thickness=?21, taper=?22, operator=?23, remark=?24,
             prog_no=?25, amount=?26, extra_fields=?27, account_id=?28,
             updated_at=datetime('now')
-         WHERE id=?29",
+         WHERE id=?29 AND user_id=?30",
         rusqlite::params![
             data.date, data.customer, data.cont_no, data.lc_c_no, data.ogc_no,
             data.part_name, data.po_no, data.bill_no, data.dwg_no, qty,
@@ -345,7 +382,7 @@ pub fn jobcards_update(
             data.mc_hrs_start, data.mc_hrs_end, data.mc_total_time,
             data.pl, data.thickness, data.taper, data.operator, data.remark, data.prog_no,
             amount, extra_fields, data.account_id,
-            id
+            id, sess.id
         ],
     )?;
 
@@ -363,13 +400,30 @@ pub fn jobcards_delete(
     session: State<'_, SessionState>,
     id: i64,
 ) -> Result<serde_json::Value> {
-    if session.0.lock().unwrap().is_none() {
-        return Err(AppError("Not authenticated".to_string()));
-    }
+    let sess = session
+        .0
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or_else(|| AppError("Not authenticated".to_string()))?;
+
     let conn = db.0.lock().unwrap();
+
+    let owner: Option<i64> = conn
+        .query_row(
+            "SELECT user_id FROM job_cards WHERE id = ?1 AND is_deleted = 0",
+            rusqlite::params![id],
+            |row| row.get(0),
+        )
+        .optional()?;
+
+    if owner != Some(sess.id) {
+        return Err(AppError("Job card not found or permission denied".to_string()));
+    }
+
     conn.execute(
-        "UPDATE job_cards SET is_deleted=1, updated_at=datetime('now') WHERE id=?1",
-        rusqlite::params![id],
+        "UPDATE job_cards SET is_deleted=1, updated_at=datetime('now') WHERE id=?1 AND user_id=?2",
+        rusqlite::params![id, sess.id],
     )?;
     Ok(serde_json::json!({ "success": true }))
 }

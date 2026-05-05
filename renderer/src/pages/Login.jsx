@@ -34,7 +34,7 @@ export default function Login({ onNeedSignup }) {
               <FileText className="w-8 h-8 text-white" />
             </div>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Job Card Manager</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Beeees</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Sign in to your account</p>
         </div>
 

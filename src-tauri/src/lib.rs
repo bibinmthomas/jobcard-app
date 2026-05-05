@@ -22,6 +22,7 @@ pub fn run() {
                 .expect("Failed to open database");
 
             db::initialize_schema(&conn).expect("Failed to initialize database schema");
+            db::run_migrations(&conn).expect("Failed to run database migrations");
 
             app.manage(state::DbState(Mutex::new(conn)));
             app.manage(state::SessionState(Mutex::new(None)));

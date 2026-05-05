@@ -3,7 +3,7 @@ import { useJobCards } from '../hooks/useJobCards';
 import { useAccounts } from '../hooks/useAccounts';
 import JobCardForm from '../components/JobCardForm';
 import JobCardList from '../components/JobCardList';
-import { Plus, FileText, X } from 'lucide-react';
+import { Plus, FileText, X, Search, ArrowUpDown } from 'lucide-react';
 
 // ─── Date range helpers ───────────────────────────────────────────────────────
 
@@ -56,17 +56,30 @@ function resolvePreset(id) {
 
 // ─── Filter bar ───────────────────────────────────────────────────────────────
 
-function FilterBar({ accounts, filters, onChange }) {
-  const { accountId, preset, customFrom, customTo } = filters;
+const SORT_OPTIONS = [
+  { value: 'date_desc',     label: 'Date (Newest)' },
+  { value: 'date_asc',      label: 'Date (Oldest)' },
+  { value: 'jobno_asc',     label: 'Job No (A→Z)' },
+  { value: 'jobno_desc',    label: 'Job No (Z→A)' },
+  { value: 'customer_asc',  label: 'Customer (A→Z)' },
+  { value: 'customer_desc', label: 'Customer (Z→A)' },
+  { value: 'amount_desc',   label: 'Amount (High→Low)' },
+  { value: 'amount_asc',    label: 'Amount (Low→High)' },
+];
+
+function FilterBar({ accounts, filters, onChange, sort, onSort }) {
+  const { accountId, preset, customFrom, customTo, search } = filters;
 
   const setField = (key) => (val) => onChange({ ...filters, [key]: val });
 
-  const hasActiveFilter = accountId !== '' || preset !== 'all';
+  const hasActiveFilter = accountId !== '' || preset !== 'all' || search !== '';
 
-  const clearAll = () => onChange({ accountId: '', preset: 'all', customFrom: '', customTo: '' });
+  const clearAll = () => onChange({ accountId: '', preset: 'all', customFrom: '', customTo: '', search: '' });
 
   return (
     <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 mb-4 shadow-sm space-y-3">
+
+      {/* Row 1: account + date filters + clear */}
       <div className="flex flex-wrap items-center gap-3">
 
         {/* Account filter */}
@@ -105,7 +118,6 @@ function FilterBar({ accounts, filters, onChange }) {
           ))}
         </div>
 
-        {/* Clear button */}
         {hasActiveFilter && (
           <button
             onClick={clearAll}
@@ -116,7 +128,33 @@ function FilterBar({ accounts, filters, onChange }) {
         )}
       </div>
 
-      {/* Custom date range row */}
+      {/* Row 2: full-width search + sort on the right */}
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Search by job no, customer, part name, bill no…"
+            value={search}
+            onChange={e => setField('search')(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <ArrowUpDown className="w-3.5 h-3.5 text-gray-400" />
+          <select
+            value={sort}
+            onChange={e => onSort(e.target.value)}
+            className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-2.5 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {SORT_OPTIONS.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Row 3 (conditional): custom date range */}
       {preset === 'custom' && (
         <div className="flex items-center gap-3 pt-1">
           <span className="text-xs font-medium text-gray-500 dark:text-gray-400">From</span>
@@ -141,7 +179,7 @@ function FilterBar({ accounts, filters, onChange }) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-const DEFAULT_FILTERS = { accountId: '', preset: 'all', customFrom: '', customTo: '' };
+const DEFAULT_FILTERS = { accountId: '', preset: 'all', customFrom: '', customTo: '', search: '' };
 
 export default function JobCards() {
   const { jobCards, isLoading, createJobCard, updateJobCard, deleteJobCard, isCreating, isUpdating } = useJobCards();
@@ -151,6 +189,7 @@ export default function JobCards() {
   const [editing, setEditing] = useState(null);
   const [error, setError]     = useState('');
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [sort, setSort]       = useState('date_desc');
 
   const openCreate = () => { setEditing(null); setMode('create'); setError(''); };
   const openEdit   = (card) => { setEditing(card); setMode('edit'); setError(''); };
@@ -205,10 +244,38 @@ export default function JobCards() {
       }
     }
 
-    return result;
-  }, [jobCards, filters]);
+    // Search filter
+    if (filters.search.trim()) {
+      const q = filters.search.trim().toLowerCase();
+      result = result.filter(c =>
+        [c.jobNo, c.customer, c.partName, c.billNo, c.poNo, c.contNo, c.ogcNo, c.operator, c.progNo]
+          .some(v => v && String(v).toLowerCase().includes(q))
+      );
+    }
 
-  const isFiltered = filters.accountId !== '' || filters.preset !== 'all';
+    // Sort
+    result = [...result].sort((a, b) => {
+      switch (sort) {
+        case 'date_asc':
+        case 'date_desc': {
+          const ta = a.date ? new Date(a.date).getTime() : 0;
+          const tb = b.date ? new Date(b.date).getTime() : 0;
+          return sort === 'date_asc' ? ta - tb : tb - ta;
+        }
+        case 'jobno_asc':     return (a.jobNo || '').localeCompare(b.jobNo || '');
+        case 'jobno_desc':    return (b.jobNo || '').localeCompare(a.jobNo || '');
+        case 'customer_asc':  return (a.customer || '').localeCompare(b.customer || '');
+        case 'customer_desc': return (b.customer || '').localeCompare(a.customer || '');
+        case 'amount_asc':    return parseFloat(a.amount || 0) - parseFloat(b.amount || 0);
+        case 'amount_desc':   return parseFloat(b.amount || 0) - parseFloat(a.amount || 0);
+        default:              return 0;
+      }
+    });
+
+    return result;
+  }, [jobCards, filters, sort]);
+
+  const isFiltered = filters.accountId !== '' || filters.preset !== 'all' || filters.search !== '';
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-8">
@@ -260,6 +327,8 @@ export default function JobCards() {
           accounts={accounts}
           filters={filters}
           onChange={setFilters}
+          sort={sort}
+          onSort={setSort}
         />
       )}
 

@@ -101,7 +101,7 @@ function Navigation() {
           {/* Right — user + logout */}
           <div className="flex items-center gap-3">
             <span className="text-xs text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wide">
-              Job Card Manager
+              Beeees
             </span>
             {user && (
               <div className="flex items-center gap-2 border-l border-gray-200 dark:border-gray-700 pl-3">

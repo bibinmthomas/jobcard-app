@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(Get-ChildItem -Path \"D:\\\\Tech\\\\PROJECTS\\\\Job Card Generator Project\\\\jobcard-app\" -Recurse -Depth 2)",
+      "Bash(Select-Object FullName)",
+      "PowerShell(head *)",
+      "Bash(cargo build *)"
     ]
   }
 }
