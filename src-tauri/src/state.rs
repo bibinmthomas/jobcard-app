@@ -5,9 +5,7 @@ pub struct DbState(pub Mutex<rusqlite::Connection>);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserSession {
-    pub id: i64,
-    pub username: String,
-    pub role: String,
+    pub authenticated: bool,
 }
 
 pub struct SessionState(pub Mutex<Option<UserSession>>);

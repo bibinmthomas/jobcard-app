@@ -3,7 +3,7 @@ import { PDFViewer, PDFDownloadLink, pdf } from '@react-pdf/renderer';
 import { useJobCards } from '../hooks/useJobCards';
 import { useAccounts } from '../hooks/useAccounts';
 import ReportPDFTemplate from '../components/ReportPDFTemplate';
-import { BarChart2, Download, Save, RefreshCw, Clock } from 'lucide-react';
+import { BarChart2, Download, Save, RefreshCw, Clock, Printer } from 'lucide-react';
 import { api } from '../utils/api';
 
 // ─── Date helpers (local — same logic as JobCards) ────────────────────────────
@@ -81,6 +81,7 @@ export default function Reports() {
   const [generated, setGenerated] = useState(false);
   const [saving, setSaving]       = useState(false);
   const [saveMsg, setSaveMsg]     = useState('');
+  const [printing, setPrinting]   = useState(false);
 
   const setField = (k) => (v) => {
     setFilters(prev => ({ ...prev, [k]: v }));
@@ -135,6 +136,32 @@ export default function Reports() {
   }, [filters, accounts]);
 
   const filename = `report-${Date.now()}.pdf`;
+
+  const handlePrint = async () => {
+    setPrinting(true);
+    try {
+      const blob = await pdf(
+        <ReportPDFTemplate cards={filteredCards} reportMeta={reportMeta} />
+      ).toBlob();
+      const url = URL.createObjectURL(blob);
+      const iframe = document.createElement('iframe');
+      iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;top:-1000px;left:-1000px;';
+      iframe.src = url;
+      document.body.appendChild(iframe);
+      iframe.onload = () => {
+        setTimeout(() => {
+          iframe.contentWindow.print();
+          setTimeout(() => {
+            document.body.removeChild(iframe);
+            URL.revokeObjectURL(url);
+            setPrinting(false);
+          }, 1000);
+        }, 200);
+      };
+    } catch (err) {
+      setPrinting(false);
+    }
+  };
 
   const handleSaveToDisk = async () => {
     setSaving(true);
@@ -321,6 +348,15 @@ export default function Reports() {
               >
                 <Save className="w-3.5 h-3.5" />
                 {saving ? 'Saving…' : 'Save to Disk'}
+              </button>
+
+              <button
+                onClick={handlePrint}
+                disabled={printing}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white rounded-lg font-medium"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                {printing ? 'Preparing…' : 'Print'}
               </button>
             </div>
           </div>

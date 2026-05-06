@@ -23,6 +23,7 @@ pub fn run() {
 
             db::initialize_schema(&conn).expect("Failed to initialize database schema");
             db::run_migrations(&conn).expect("Failed to run database migrations");
+            db::seed_default_password(&conn).expect("Failed to seed default password");
 
             app.manage(state::DbState(Mutex::new(conn)));
             app.manage(state::SessionState(Mutex::new(None)));
@@ -30,9 +31,9 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            commands::auth::auth_has_users,
-            commands::auth::auth_register,
             commands::auth::auth_login,
+            commands::auth::auth_reset_password,
+            commands::auth::auth_change_expired_password,
             commands::auth::auth_logout,
             commands::auth::auth_get_session,
             commands::jobcards::jobcards_list,

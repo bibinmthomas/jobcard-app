@@ -1,19 +1,18 @@
-import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
-import Dashboard  from './pages/Dashboard';
-import JobCards   from './pages/JobCards';
-import Accounts   from './pages/Accounts';
-import Admin      from './pages/Admin';
-import Reports    from './pages/Reports';
-import Login      from './pages/Login';
-import Signup     from './pages/Signup';
+import Dashboard            from './pages/Dashboard';
+import JobCards             from './pages/JobCards';
+import Accounts             from './pages/Accounts';
+import Admin                from './pages/Admin';
+import Reports              from './pages/Reports';
+import Login                from './pages/Login';
+import ResetPassword        from './pages/ResetPassword';
+import ChangeExpiredPassword from './pages/ChangeExpiredPassword';
 
 import { FileText, Home, Building2, Settings, LogOut, BarChart2 } from 'lucide-react';
-import { api } from './utils/api';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -24,19 +23,9 @@ const queryClient = new QueryClient({
 // ─── Auth Gate ────────────────────────────────────────────────────────────────
 
 function AuthGate() {
-  const { user, loading } = useAuth();
-  const [hasUsers, setHasUsers]     = useState(null);
-  const [showSignup, setShowSignup] = useState(false);
+  const { user, loading, passwordStatus } = useAuth();
 
-  useEffect(() => {
-    if (!user && !loading) {
-      api.auth.hasUsers()
-        .then(result => setHasUsers(result))
-        .catch(() => setHasUsers(false));
-    }
-  }, [user, loading]);
-
-  if (loading || (hasUsers === null && !user)) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <p className="text-gray-500 dark:text-gray-400">Loading…</p>
@@ -44,27 +33,17 @@ function AuthGate() {
     );
   }
 
-  // Logged in — show main app
-  if (user) return <MainApp />;
-
-  // No users at all → show signup (first launch)
-  if (!hasUsers) {
-    return <Signup onHaveAccount={() => setShowSignup(false)} />;
-  }
-
-  // Has users but not logged in
-  if (showSignup) {
-    return <Signup onHaveAccount={() => setShowSignup(false)} />;
-  }
-
-  return <Login onNeedSignup={() => setShowSignup(true)} />;
+  if (!user)                        return <Login />;
+  if (passwordStatus?.needsReset)   return <ResetPassword />;
+  if (passwordStatus?.isExpired)    return <ChangeExpiredPassword />;
+  return <MainApp />;
 }
 
 // ─── Navigation ───────────────────────────────────────────────────────────────
 
 function Navigation() {
-  const location = useLocation();
-  const { user, logout } = useAuth();
+  const location  = useLocation();
+  const { logout } = useAuth();
 
   const navItems = [
     { path: '/',         label: 'Dashboard', icon: Home      },
@@ -98,30 +77,18 @@ function Navigation() {
             ))}
           </div>
 
-          {/* Right — user + logout */}
+          {/* Right — brand + logout */}
           <div className="flex items-center gap-3">
             <span className="text-xs text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wide">
               Beeees
             </span>
-            {user && (
-              <div className="flex items-center gap-2 border-l border-gray-200 dark:border-gray-700 pl-3">
-                <span className="text-xs text-gray-600 dark:text-gray-300">
-                  {user.username}
-                  {user.role === 'admin' && (
-                    <span className="ml-1 text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-1 rounded">
-                      admin
-                    </span>
-                  )}
-                </span>
-                <button
-                  onClick={logout}
-                  title="Sign out"
-                  className="p-1 text-gray-400 hover:text-red-500 rounded"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
-              </div>
-            )}
+            <button
+              onClick={logout}
+              title="Sign out"
+              className="p-1 text-gray-400 hover:text-red-500 rounded transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>

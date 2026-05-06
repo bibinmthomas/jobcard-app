@@ -19,7 +19,6 @@ pub struct FormField {
     pub required: bool,
     #[serde(rename = "order")]
     pub display_order: i64,
-    pub user_id: Option<i64>,
     pub is_deleted: bool,
     pub created_at: String,
     pub updated_at: String,
@@ -53,11 +52,20 @@ fn map_form_field(row: &rusqlite::Row<'_>) -> rusqlite::Result<FormField> {
         options,
         required: row.get::<_, i32>("required")? != 0,
         display_order: row.get("display_order")?,
-        user_id: row.get("user_id")?,
         is_deleted: row.get::<_, i32>("is_deleted")? != 0,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
     })
+}
+
+fn require_session(session: &State<'_, SessionState>) -> Result<()> {
+    session
+        .0
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or_else(|| AppError("Not authenticated".to_string()))?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -65,20 +73,15 @@ pub fn form_fields_list(
     db: State<'_, DbState>,
     session: State<'_, SessionState>,
 ) -> Result<Vec<FormField>> {
-    let sess = session
-        .0
-        .lock()
-        .unwrap()
-        .clone()
-        .ok_or_else(|| AppError("Not authenticated".to_string()))?;
+    require_session(&session)?;
     let conn = db.0.lock().unwrap();
     let mut stmt = conn.prepare(
         "SELECT id, name, label, field_type, options, required, display_order,
-                user_id, is_deleted, created_at, updated_at
-         FROM form_fields WHERE is_deleted = 0 AND user_id = ?1 ORDER BY display_order ASC",
+                is_deleted, created_at, updated_at
+         FROM form_fields WHERE is_deleted = 0 ORDER BY display_order ASC",
     )?;
     let rows = stmt
-        .query_map(rusqlite::params![sess.id], map_form_field)?
+        .query_map([], map_form_field)?
         .collect::<rusqlite::Result<Vec<FormField>>>()?;
     Ok(rows)
 }
@@ -89,12 +92,7 @@ pub fn form_fields_create(
     session: State<'_, SessionState>,
     data: FormFieldInput,
 ) -> Result<FormField> {
-    let sess = session
-        .0
-        .lock()
-        .unwrap()
-        .clone()
-        .ok_or_else(|| AppError("Not authenticated".to_string()))?;
+    require_session(&session)?;
 
     let name = data
         .name
@@ -139,15 +137,15 @@ pub fn form_fields_create(
 
     let conn = db.0.lock().unwrap();
     conn.execute(
-        "INSERT INTO form_fields (name, label, field_type, options, required, display_order, user_id)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        rusqlite::params![normalized_name, label, field_type, opts_json, required as i32, order, sess.id],
+        "INSERT INTO form_fields (name, label, field_type, options, required, display_order)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        rusqlite::params![normalized_name, label, field_type, opts_json, required as i32, order],
     )?;
 
     let id = conn.last_insert_rowid();
     let field = conn.query_row(
         "SELECT id, name, label, field_type, options, required, display_order,
-                user_id, is_deleted, created_at, updated_at
+                is_deleted, created_at, updated_at
          FROM form_fields WHERE id = ?1",
         rusqlite::params![id],
         map_form_field,
@@ -162,30 +160,21 @@ pub fn form_fields_update(
     id: i64,
     data: FormFieldInput,
 ) -> Result<FormField> {
-    let sess = session
-        .0
-        .lock()
-        .unwrap()
-        .clone()
-        .ok_or_else(|| AppError("Not authenticated".to_string()))?;
+    require_session(&session)?;
 
     let conn = db.0.lock().unwrap();
 
-    let current: Option<(String, String, Option<String>, i32, i64, Option<i64>)> = conn
+    let current: Option<(String, String, Option<String>, i32, i64)> = conn
         .query_row(
-            "SELECT label, field_type, options, required, display_order, user_id
+            "SELECT label, field_type, options, required, display_order
              FROM form_fields WHERE id = ?1 AND is_deleted = 0",
             rusqlite::params![id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
         )
         .optional()?;
 
-    let (cur_label, cur_type, cur_opts, cur_required, cur_order, owner) =
+    let (cur_label, cur_type, cur_opts, cur_required, cur_order) =
         current.ok_or_else(|| AppError("Form field not found".to_string()))?;
-
-    if owner != Some(sess.id) {
-        return Err(AppError("Form field not found or permission denied".to_string()));
-    }
 
     let new_type = data.field_type.as_deref().unwrap_or(&cur_type).to_string();
     if !VALID_TYPES.contains(&new_type.as_str()) {
@@ -212,13 +201,13 @@ pub fn form_fields_update(
     conn.execute(
         "UPDATE form_fields SET label=?1, field_type=?2, options=?3, required=?4,
                  display_order=?5, updated_at=datetime('now')
-         WHERE id=?6 AND user_id=?7",
-        rusqlite::params![new_label, new_type, new_opts, new_required, new_order, id, sess.id],
+         WHERE id=?6",
+        rusqlite::params![new_label, new_type, new_opts, new_required, new_order, id],
     )?;
 
     let field = conn.query_row(
         "SELECT id, name, label, field_type, options, required, display_order,
-                user_id, is_deleted, created_at, updated_at
+                is_deleted, created_at, updated_at
          FROM form_fields WHERE id = ?1",
         rusqlite::params![id],
         map_form_field,
@@ -232,31 +221,24 @@ pub fn form_fields_delete(
     session: State<'_, SessionState>,
     id: i64,
 ) -> Result<serde_json::Value> {
-    let sess = session
-        .0
-        .lock()
-        .unwrap()
-        .clone()
-        .ok_or_else(|| AppError("Not authenticated".to_string()))?;
+    require_session(&session)?;
 
     let conn = db.0.lock().unwrap();
 
-    let owner: Option<i64> = conn
+    let exists: bool = conn
         .query_row(
-            "SELECT user_id FROM form_fields WHERE id = ?1 AND is_deleted = 0",
+            "SELECT COUNT(*) FROM form_fields WHERE id = ?1 AND is_deleted = 0",
             rusqlite::params![id],
-            |row| row.get(0),
-        )
-        .optional()?
-        .flatten();
+            |row| row.get::<_, i64>(0),
+        )? > 0;
 
-    if owner != Some(sess.id) {
-        return Err(AppError("Form field not found or permission denied".to_string()));
+    if !exists {
+        return Err(AppError("Form field not found".to_string()));
     }
 
     conn.execute(
-        "UPDATE form_fields SET is_deleted=1, updated_at=datetime('now') WHERE id=?1 AND user_id=?2",
-        rusqlite::params![id, sess.id],
+        "UPDATE form_fields SET is_deleted=1, updated_at=datetime('now') WHERE id=?1",
+        rusqlite::params![id],
     )?;
     Ok(serde_json::json!({ "success": true }))
 }

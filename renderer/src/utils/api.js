@@ -10,11 +10,11 @@ import { open, save } from '@tauri-apps/plugin-dialog';
 export const api = {
   // ── Auth ────────────────────────────────────────────────────────────────────
   auth: {
-    hasUsers:   ()       => invoke('auth_has_users'),
-    register:   (data)   => invoke('auth_register', data),
-    login:      (data)   => invoke('auth_login', data),
-    logout:     ()       => invoke('auth_logout'),
-    getSession: ()       => invoke('auth_get_session'),
+    login:                 (password)              => invoke('auth_login', { password }),
+    resetPassword:         (newPassword)           => invoke('auth_reset_password', { newPassword }),
+    changeExpiredPassword: (oldPassword, newPassword) => invoke('auth_change_expired_password', { oldPassword, newPassword }),
+    logout:                ()                      => invoke('auth_logout'),
+    getSession:            ()                      => invoke('auth_get_session'),
   },
 
   // ── Job Cards ────────────────────────────────────────────────────────────────

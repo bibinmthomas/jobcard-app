@@ -4,10 +4,10 @@ import { api } from '../utils/api';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser]       = useState(null);   // { id, username, role }
-  const [loading, setLoading] = useState(true);    // checking for existing session
+  const [user, setUser]                   = useState(null);   // { authenticated: true } | null
+  const [passwordStatus, setPasswordStatus] = useState(null); // { needsReset, isExpired } | null
+  const [loading, setLoading]             = useState(true);
 
-  // On mount, check if there's an active session in the main process
   useEffect(() => {
     api.auth.getSession()
       .then(session => setUser(session))
@@ -15,25 +15,31 @@ export function AuthProvider({ children }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const login = useCallback(async (username, password) => {
-    const session = await api.auth.login({ username, password });
-    setUser(session);
-    return session;
+  const login = useCallback(async (password) => {
+    const result = await api.auth.login(password);
+    setUser({ authenticated: true });
+    setPasswordStatus({ needsReset: result.needsReset, isExpired: result.isExpired });
+    return result;
   }, []);
 
-  const register = useCallback(async (username, password) => {
-    const session = await api.auth.register({ username, password });
-    setUser(session);
-    return session;
+  const resetPassword = useCallback(async (newPassword) => {
+    await api.auth.resetPassword(newPassword);
+    setPasswordStatus({ needsReset: false, isExpired: false });
+  }, []);
+
+  const changeExpiredPassword = useCallback(async (oldPassword, newPassword) => {
+    await api.auth.changeExpiredPassword(oldPassword, newPassword);
+    setPasswordStatus({ needsReset: false, isExpired: false });
   }, []);
 
   const logout = useCallback(async () => {
     await api.auth.logout();
     setUser(null);
+    setPasswordStatus(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, passwordStatus, loading, login, resetPassword, changeExpiredPassword, logout }}>
       {children}
     </AuthContext.Provider>
   );
