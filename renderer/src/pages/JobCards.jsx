@@ -179,7 +179,7 @@ function FilterBar({ accounts, filters, onChange, sort, onSort }) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-const DEFAULT_FILTERS = { accountId: '', preset: 'all', customFrom: '', customTo: '', search: '' };
+const DEFAULT_FILTERS = { accountId: '', preset: 'week', customFrom: '', customTo: '', search: '' };
 
 export default function JobCards() {
   const { jobCards, isLoading, createJobCard, updateJobCard, deleteJobCard, isCreating, isUpdating } = useJobCards();
